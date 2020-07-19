@@ -1,8 +1,12 @@
 import numpy as np
 import pandas as pd
 import timeit
+
+from numpy.core._multiarray_umath import ndarray
 from tqdm import tqdm
 from os import path
+import scipy
+from scipy.linalg import block_diag
 
 # Specification of directories
 base_path = path.dirname(__file__)  # Location of the main.py
@@ -62,3 +66,37 @@ surp = (surp - dcenter_surp) / dscale_surp
 
 x_data = np.vstack((np.ones((1,t)),surp.T))
 x0 = np.vstack((x_data, x0))
+
+""" Data constructs for posterior computation """
+# Define useful constants
+k = n * p + len(x_data)  # Number of coefficients in each equation (endogenous + exogenous + constant)
+
+# Size of parameters vector, where n * k corresponds to coefficients
+# across all VAR equations and the first item corresponds to covariance elements of
+# error covariance matrix
+nk = int(0.5 * n * (n - 1) + n * k)  # size of parameters vector
+
+# Construct x - confirm what is x! - and construct indices cidx and bidx to recover covariance coefficients
+x = x0
+cidx = np.zeros((k, 1))
+for i in range(2):
+    x = np.vstack((x,-y_short[:(i+1), :], x0))
+    cidx = np.vstack((cidx, np.ones((i+1, 1)), np.zeros((k, 1))))
+bidx = 1 - cidx
+
+# Construct prototype f, g, z, q used for priors and posterior computation
+z0 = [None] * n
+for i in range(n):
+    z0[i] = np.ones((k + i, 1))
+z = np.tile(block_diag(*z0), (1,t))
+w = np.kron(np.eye(t), block_diag(*z0).T)
+widx = w.copy()
+g = z.copy()
+gidx = g.copy() != 0  # note: this is actually G' in the paper
+z[z != 0] = x.flatten()
+z = z.T
+f = []
+for j in range(1, nk):
+    f = block_diag(f, np.ones((j, 1)))
+f = f[1:,:]
+f = np.tile(np.hstack((np.zeros((f.shape[0], 1)), f)), (1, t))  # This will hold the gammas for sampling Phi
