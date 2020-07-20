@@ -6,7 +6,7 @@ from numpy.core._multiarray_umath import ndarray
 from tqdm import tqdm
 from os import path
 import scipy
-from scipy.linalg import block_diag
+from scipy.linalg import block_diag, ldl
 
 # Specification of directories
 base_path = path.dirname(__file__)  # Location of the main.py
@@ -34,7 +34,7 @@ p = 3  # number of AR lags
 # Setting to save every "simstep"^th draw; useful for running long chains
 # on windows machines with limited memory
 simstep = 5
-svsims = np.floor(nsims/simstep)
+svsims = int(np.floor(nsims/simstep))
 
 """ Data processing """
 data = pd.read_csv(path.join(data_path, filename), header=None)
@@ -100,3 +100,71 @@ for j in range(1, nk):
     f = block_diag(f, np.ones((j, 1)))
 f = f[1:,:]
 f = np.tile(np.hstack((np.zeros((f.shape[0], 1)), f)), (1, t))  # This will hold the gammas for sampling Phi
+
+# Useful indices
+fidx = f.copy() != 0
+uidx = np.triu(np.ones((nk, nk)))
+uidx[:, -1] = 0
+biguidx = np.tile(uidx, (1, t))
+phi_idx = np.triu(np.ones((nk, nk)) - np.eye(nk))
+
+""" Priors """
+# For the Inverse Wishart (IW) prior set (used here):
+s0h = n + 11  # v0 in the paper, check what 11 is for
+S0h = 0.01**2 * (s0h - n - 1) * np.eye(n)  # RR0 in the paper
+
+# For the Inverse Gamma (IG) priors, the following corresponds to the marginal prior on
+# Sig_h(i,i) under the Inverse Wishart (used in the diagonal transition cov
+# version):
+s0hIG = (s0h - n + 1) / 2
+S0hIG = np.diag(S0h) / 2
+
+# Standard priors for other distributions
+a0 = np.zeros((nk, 1))
+A0 = np.eye(nk)
+phi0 = np.zeros((int(nk * (nk - 1) / 2), 1))
+Phi0 = np.eye(len(phi0)) * 10
+Hsmall = np.diag(-np.ones((t - 1)), -1) + np.eye(t)
+H = np.diag(-np.ones((t-1) * nk), -nk) + np.eye(t * nk)
+HH = H.T @ H
+K = block_diag(A0, HH)
+G0 = np.ones((nk, 1))
+mu0 = np.zeros((nk, 1))
+M0 = np.ones((nk, 1))
+L01 = 0.1
+L02 = 0.1
+lam20 = [L01, L02]  # The same for all Lasso's
+
+# Starting values
+_, Sig, _ = ldl(np.cov(y_data, rowvar=False))  #Block LDL' factorization for Hermitian indefinite matrices, return D
+h = np.tile(np.log(np.diag(Sig).reshape(np.diag(Sig).shape[0],1)), (t, 1))
+Sigh = S0h / (s0h + n + 1)  # Start with the prior mode
+bigSig = np.diag(np.exp(-h.ravel()))
+tau2 = np.random.exponential(1, (nk, 1))
+mu = np.zeros((nk, 1))
+om_st = np.sqrt(tau2) * np.random.randn(nk, 1)
+om = om_st.copy()
+om[[om_st <= 0]] = 0  # Truncating om_st values to be > 0
+alpha = np.random.randn(nk, 1)
+gamma = np. random.randn(nk, t)
+Phi = np.eye(nk)
+scl2_1 = np.ones((nk, 1))
+scl2_2 = 1
+loc = np.zeros((nk, 1))
+
+# Allocate space for draws
+s_alpha = np.zeros((nk, svsims))
+s_gamma = [np.zeros((nk, t)) for i in range(svsims)]
+s_beta = [np.zeros((nk, t)) for i in range(svsims)]
+s_Phi = [np.zeros((nk, nk)) for i in range(svsims)]
+s_Sig = [np.zeros((n, t)) for i in range(svsims)]
+s_Sigh = [np.zeros((n, n)) for i in range(svsims)]
+s_lam2 = np.zeros((1, svsims))
+s_tau2 = np.zeros((nk, svsims))
+s_mu = np.zeros((nk, svsims))
+s_om_st = np.zeros((nk, svsims))
+s_om = np.zeros((nk, svsims))
+s_adj = [np.zeros((nk, 3)) for i in range(svsims)] # hardcoded 3 - double check!
+
+# Final initialisations
+print('Sampling',burnin+nsims,'draws from the posterior...')
