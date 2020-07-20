@@ -204,5 +204,5 @@ for isim in tqdm(range(int(burnin+nsims))):
     sseh = errh @ errh.T
     Sigh = invwishart.rvs(s0h + t - 1, S0h + sseh)  # Correlated volatilities IW(df, scale)
 
-
+    # Sample om, om_st, tau2, lam2
 
