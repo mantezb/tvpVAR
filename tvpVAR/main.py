@@ -7,8 +7,11 @@ import scipy
 from scipy.stats import invwishart
 from scipy.linalg import block_diag, ldl
 import numpy.linalg as lin
+import matplotlib.pyplot as plt
 from tvpVAR.utils.hpr_sampler import hpr_sampler
 from tvpVAR.utils.mvsvrw import mvsvrw
+from tvpVAR.utils.ineff_factor import ineff_factor
+from tvpVAR.utils.ir_vecm_sv import ir_vecm_sv
 
 # Specification of directories
 base_path = path.dirname(__file__)  # Location of the main.py
@@ -162,17 +165,17 @@ lam2_f = None
 
 # Allocate space for draws
 s_alpha = np.zeros((nk, svsims))
-s_gamma = [np.zeros((nk, t)) for i in range(svsims)]
-s_beta = [np.zeros((nk, t)) for i in range(svsims)]
-s_Phi = [np.zeros((nk, nk)) for i in range(svsims)]
-s_Sig = [np.zeros((n, t)) for i in range(svsims)]
-s_Sigh = [np.zeros((n, n)) for i in range(svsims)]
+s_gamma = np.array([np.zeros((nk, t)) for i in range(svsims)])
+s_beta = np.array([np.zeros((nk, t)) for i in range(svsims)])
+s_Phi = np.array([np.zeros((nk, nk)) for i in range(svsims)])
+s_Sig = np.array([np.zeros((n, t)) for i in range(svsims)])
+s_Sigh = np.array([np.zeros((n, n)) for i in range(svsims)])
 s_lam2 = np.zeros((1, svsims))
 s_tau2 = np.zeros((nk, svsims))
 s_mu = np.zeros((nk, svsims))
 s_om_st = np.zeros((nk, svsims))
 s_om = np.zeros((nk, svsims))
-s_adj = [np.zeros((nk, 3)) for i in range(svsims)] # hardcoded 3 - double check!
+s_adj = np.array([np.zeros((nk, 3)) for i in range(svsims)]) # hardcoded 3 - double check!
 
 
 " MCMC Sampler"
@@ -279,24 +282,65 @@ for isim in tqdm(range(int(burnin+nsims))):
         gamma = gamma - np.tile(loc, (1, t))
 
     # Save draws
-    if isim + 1 > burnin & np.mod(isim + 1 - burnin, simstep) == 0:
+    if (isim + 1 > burnin) and (np.mod(isim + 1 - burnin, simstep) == 0):
         isave = (isim + 1 - burnin) / simstep
         s_alpha[:, isave] = alpha
-        s_gamma[isave] = np.diag(np.sqrt(g0).ravel()) @ gamma
-        s_beta[isave] = np.tile(alpha, (1, t)) + np.diag(om.ravel()) @ Phi.T @ gamma
-        s_Phi[isave] = np.diag(np.sqrt(g0).ravel()) @ Phi.T @ np.diag(np.sqrt(1 / g0).ravel())
-        s_Sig[isave] = np.exp(shorth)  # Sig
-        s_Sigh[isave] = Sigh
+        s_gamma[:, :, isave] = np.diag(np.sqrt(g0).ravel()) @ gamma
+        s_beta[:, :, isave] = np.tile(alpha, (1, t)) + np.diag(om.ravel()) @ Phi.T @ gamma
+        s_Phi[:, :, isave] = np.diag(np.sqrt(g0).ravel()) @ Phi.T @ np.diag(np.sqrt(1 / g0).ravel())
+        s_Sig[:, :, isave] = np.exp(shorth)  # Sig
+        s_Sigh[:, :, isave] = Sigh
         s_lam2[:, isave] = lam2
         s_tau2[:, isave] = tau2
         s_mu[: isave] = mu
         s_om_st[:, isave] = om_st * np.sqrt(1 / g0)
         s_om[:, isave] = om * np.sqrt(1 / g0)
-        s_adj[isave] = np.hstack((np.sqrt(scl2_1), np.vstack((np.sqrt(scl2_2), np.zeros((nk - 1, 1)))), loc))
+        s_adj[:, :, isave] = np.hstack((np.sqrt(scl2_1), np.vstack((np.sqrt(scl2_2), np.zeros((nk - 1, 1)))), loc))
 
 
 stop = timeit.default_timer()
 print('Sampling completed after', stop - start)
 
+""" Diagnostics """
+
+mbeta0 = np.mean(s_beta, axis=0).T
+mbeta = np.zeros(mbeta0.shape)
+mbeta[:, :np.count_nonzero(cidx)] = mbeta0[:, cidx]
+mbeta[:, np.count_nonzero(cidx):] = mbeta0[:, bidx]
+
+# MCM mixing analysis and beta plots
+ef_om_st = ineff_factor(s_om_st)
+ef_beta = ineff_factor(np.reshape(s_beta, (nk * t, svsims)))
+eff_factors_df = pd.DataFrame({'Omega_star': ef_om_st, 'Beta': ef_beta})
+# Plotting
+eff_factors_df.boxplot()  # A boxplot of Omega_star and Bet inefficiency factors
+plt.plot(np.max(mbeta, axis=0) - np.min(mbeta, axis=0), marker='o', c='m', linestyle = 'dashed')
+plt.ylabel('Max vs min beta')
+plt.show()
+
+# Plot the time invariant/constant param probabilities
+p_tiv0 = np.sum(s_om == 0, axis=1).T.reshape((1,len(s_om == 0))) / svsims
+p_tiv = np.zeros(p_tiv0.shape)
+p_tiv[:np.count_nonzero(cidx)] = p_tiv0[cidx]
+p_tiv[np.count_nonzero(cidx):] = p_tiv0[bidx]
+# Plotting
+plt.plot(p_tiv, marker='o', c='m', linestyle='dashed')
+plt.ylabel('TIV probability')
+plt.show()
+
+# Impulse responses
+scale_adj = dscale.T * (1 / dscale)
+per = np.arange(1959.5, 2011.75, 0.25)
+t_start = np.argwhere(per == 2000)
+s = 20
+ab2, c, svars, ir, err = ir_vecm_sv(s_beta, s_Sig, cidx, t_start, s, 2.08 * dscale[2] / dscale[0], p,
+                                np.diag((1/dscale_surp)).ravel()) \
+                                * np.array([[1, -1, 0], [0, 1, -1]])*np.diag(dscale.ravel())
+nerr = np.count_nonzero(err)
+bands = np.floor(np.array([0.16, 0.5, 0.85]) * (svsims - nerr))
+ir_sort = np.take_along_axis(ir[~err],)
+
+# make ir plots
+#ir_plots
 
 
