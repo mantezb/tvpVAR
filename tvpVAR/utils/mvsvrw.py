@@ -2,9 +2,10 @@ import numpy as np
 from scipy.stats import norm
 from scipy.linalg import block_diag
 import numpy.linalg as lin
+from typing import Tuple
 
 
-def mvsvrw(y_star, h, iSig, iVh):
+def mvsvrw(y_star: np.ndarray, h: np.ndarray, iSig: np.ndarray, iVh: np.ndarray) -> np.ndarray:
     """
     This function simulates log-volatilities for a multivariate stochastic
     volatility model with independent random-walk transitions.
@@ -12,7 +13,7 @@ def mvsvrw(y_star, h, iSig, iVh):
     :param h:
     :param iSig:
     :param iVh:
-    :return:
+    :return h, S:
     """
 
     n = iSig.shape[0]
@@ -41,7 +42,7 @@ def mvsvrw(y_star, h, iSig, iVh):
     hhat = lin.lstsq(Ph, invOmega @ (y_star - dconst))[0]
     h = hhat + lin.lstsq(Ch, np.random.randn(tn, 1))
 
-    return h, S
+    return np.hstack((h, S))
 
 
 
