@@ -19,16 +19,17 @@ def tnr_icdf(a: np.ndarray, b: np.ndarray, n: int) -> np.ndarray:
 
 
 def tnr_ar1(a: np.ndarray, b: np.ndarray, n: int) -> np.ndarray:
-    alpha = 0.5 * (a + np.sqrt(a**2 + 4))
+    alpha = 0.5 * (a + np.sqrt(np.power(a, 2) + 4))
     z = np.tile(np.nan, (n, 1)).ravel()
     idx = np.arange(0, n)
 
     while idx.size > 0:
         z_new = a[idx] + np.random.exponential(1 / alpha[idx])
-        r = np.exp(-(z_new - alpha[idx])**2 / 2)
+        r = np.array(np.exp(-np.power((z_new - alpha[idx]), 2) / 2)).ravel()
         u = np.random.rand(len(idx), 1).ravel()
-        z[idx[(u <= r) & (z_new <= b[idx])]] = z_new[(u <= r) & (z_new <= b[idx])]
-        idx = idx[(u > r) | (z_new > b[idx])]
+        z_new = np.array(z_new).ravel()
+        z[idx[(u <= r) & (z_new <= np.array(b).ravel()[idx])]] = z_new[(u <= r) & (z_new <= np.array(b).ravel()[idx])]
+        idx = idx[(u > r) | (z_new > np.array(b).ravel()[idx])]
 
     return _control_shape(z)
 
@@ -69,12 +70,17 @@ def tnr(mu: np.ndarray, sig: np.ndarray, lb: np.ndarray, ub: np.ndarray) -> np.n
     utol = 7
     ltol = -7
 
-    n = len(mu)
+    n = mu.shape[0]
     a = (lb - mu) / sig
     b = (ub - mu) / sig
+    #sig = 0.000125
+    a = np.array(a).ravel()
+    b = np.array(b).ravel()
+    #a = np.array(-0.18830241).ravel()#np.array(a).ravel()
+    #b = np.array(np.inf).ravel() #np.array(b).ravel()
 
-    idx_icdf = np.nonzero((a < utol) & (b > ltol))
-    idx_ar = np.nonzero((a >= utol) | (b <= ltol))
+    idx_icdf = np.nonzero((a.item() < utol) & (b.item()  > ltol))
+    idx_ar = np.nonzero((a.item()  >= utol) | (b.item()  <= ltol))
     idx_arl = np.nonzero(a[idx_ar] > 0)
     idx_arr = np.nonzero(b[idx_ar] < 0)
 
@@ -83,13 +89,13 @@ def tnr(mu: np.ndarray, sig: np.ndarray, lb: np.ndarray, ub: np.ndarray) -> np.n
     idx_arl = np.asarray(idx_arl).ravel()
     idx_arr = np.asarray(idx_arr).ravel()
 
-    dbd_l = 2 * np.sqrt(np.exp(1)) / (a + np.sqrt(a**2 + 4)) * np.exp((a**2 - a * np.sqrt(a**2 + 4)) / 4)
-    dbd_r = 2 * np.sqrt(np.exp(1)) / (-b + np.sqrt(b**2 + 4)) * np.exp((b**2 + b * np.sqrt(b**2 + 4)) / 4)
+    dbd_l = 2 * np.sqrt(np.exp(1)) / (a + np.sqrt(np.power(a, 2) + 4)) * np.exp((np.power(a.item(), 2) - a * np.sqrt(np.power(a, 2) + 4)) / 4)
+    dbd_r = 2 * np.sqrt(np.exp(1)) / (-b + np.sqrt(np.power(b, 2) + 4)) * np.exp((np.power(b, 2) + b * np.sqrt(np.power(b, 2) + 4)) / 4)
 
-    idx_ar1l = np.asarray(np.nonzero(b[idx_ar[idx_arl]] - a[idx_ar[idx_arl]] > dbd_l[idx_ar[idx_arl]])).ravel()
-    idx_ar2l = np.asarray(np.nonzero(b[idx_ar[idx_arl]] - a[idx_ar[idx_arl]] <= dbd_l[idx_ar[idx_arl]])).ravel()
-    idx_ar1r = np.asarray(np.nonzero(b[idx_ar[idx_arr]] - a[idx_ar[idx_arr]] > dbd_r[idx_ar[idx_arr]])).ravel()
-    idx_ar2r = np.asarray(np.nonzero(b[idx_ar[idx_arr]] - a[idx_ar[idx_arr]] <= dbd_r[idx_ar[idx_arr]])).ravel()
+    idx_ar1l = np.asarray(np.nonzero((b[idx_ar[idx_arl]] - a[idx_ar[idx_arl]]) > dbd_l[idx_ar[idx_arl]])).ravel()
+    idx_ar2l = np.asarray(np.nonzero((b[idx_ar[idx_arl]] - a[idx_ar[idx_arl]]) <= dbd_l[idx_ar[idx_arl]])).ravel()
+    idx_ar1r = np.asarray(np.nonzero((b[idx_ar[idx_arr]] - a[idx_ar[idx_arr]]) > dbd_r[idx_ar[idx_arr]])).ravel()
+    idx_ar2r = np.asarray(np.nonzero((b[idx_ar[idx_arr]] - a[idx_ar[idx_arr]]) <= dbd_r[idx_ar[idx_arr]])).ravel()
     idx_ar2 = np.hstack((idx_arl[idx_ar2l], idx_arr[idx_ar2r]))
 
     x = np.tile(np.nan, (n, 1))
@@ -110,8 +116,8 @@ def tnr(mu: np.ndarray, sig: np.ndarray, lb: np.ndarray, ub: np.ndarray) -> np.n
 
     if idx_ar2.size > 0:
         # two-sided
-        x[idx_ar[idx_ar[idx_ar2]]] = tnr_ar2(a[idx_ar[idx_ar2]], b[idx_ar[idx_ar2]], len(idx_ar2))
+        x[idx_ar[idx_ar2]] = tnr_ar2(a[idx_ar[idx_ar2]], b[idx_ar[idx_ar2]], len(idx_ar2))
 
     y = mu + sig * x
 
-    return y
+    return y.item()

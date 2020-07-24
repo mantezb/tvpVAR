@@ -48,7 +48,7 @@ def hpr_sampler(lam20: np.ndarray, y: np.ndarray, g: np.ndarray, bigSig: np.ndar
     for j in range(m):
         nj = np.hstack(((np.arange(1, j)), np.arange(j + 1, m)))
         g_nj = g[:, nj]
-        g_j = g[:, j].reshape((len(g), 1))
+        g_j = g[:, j].reshape((-1, 1))
         vj = y - g_nj @ om[nj]
 
         # compute posterior quantities
@@ -62,15 +62,17 @@ def hpr_sampler(lam20: np.ndarray, y: np.ndarray, g: np.ndarray, bigSig: np.ndar
         ln_xi3 = ((muj_hat**2) / tau2j_hat - (mu[j]**2) / tau2[j]) / 2
         pi_j = 1 / (1 + np.exp(ln_xi0 + ln_xi1 - ln_xi2 + ln_xi3))
 
-        om_st[j] = tnr(muj_hat, np.sqrt(tau2j_hat), 0, np.inf)
-        if pi_j > np.random.rand(1):
-            om_st[j] = tnr(mu[j], np.sqrt(tau2[j]), np.NINF, 0)
-        om[j] = om_st[j] * (om_st[j] > 0)
+        if pi_j.item() > np.random.rand(1):
+            om_st[j, 0] = tnr(mu[j], np.sqrt(tau2[j]), np.NINF, 0)
+        else:
+            om_st[j, 0] = tnr(muj_hat, np.sqrt(tau2j_hat), 0, np.inf)
+
+        om[j, 0] = om_st[j, 0] * (om_st[j, 0] > 0)
 
         if lasso:
             tau2[j] = 1 / np.random.wald(np.sqrt(lam2) / np.abs(om_st[j] - mu[j]), lam2)
 
-        return om, om_st, tau2, lam2
+    return om, om_st, tau2, lam2
 
 
 

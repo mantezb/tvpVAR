@@ -4,13 +4,14 @@ from scipy.linalg import block_diag
 from scipy.sparse.linalg import spsolve
 import scipy.sparse as sps
 from sksparse.cholmod import cholesky as chol
+from tvpVAR.utils.utils import repmat
 import tvpVAR.utils.settings as settings
 
 import numpy.linalg as lin
 from typing import Tuple
 
 
-def mvsvrw(y_star: np.ndarray, h: np.ndarray, iSig: np.ndarray, iVh: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def mvsvrw(y_star: np.ndarray, h: sps.csc_matrix, iSig: sps.csc_matrix, iVh: sps.csc_matrix) -> Tuple[sps.csc_matrix, np.ndarray]:
     """
     This function simulates log-volatilities for a multivariate stochastic
     volatility model with independent random-walk transitions.
@@ -33,21 +34,21 @@ def mvsvrw(y_star: np.ndarray, h: np.ndarray, iSig: np.ndarray, iVh: np.ndarray)
     # Sample S from a 7-point discrete distribution
     temprand = np.random.rand(tn, 1)
 
-    q = np.tile(pi, (tn, 1)) * norm.pdf(np.tile(y_star, (1, 7)),
-                                        np.tile(h, (1, 7)) + np.tile(mi, (tn, 1)), np.tile(sqrtsigi, (tn, 1)))
-    q = q / np.tile(np.reshape(np.sum(q, axis=1), (-1, 1)), (1, 7))
-    S = 7 - np.reshape(np.sum(np.tile(temprand, (1, 7)) < np.cumsum(q, axis=1), axis=1), (-1, 1)) + 1
+    q = repmat(pi, tn, 1) * norm.pdf(repmat(y_star, 1, 7),
+                                        repmat(h, 1, 7).toarray() + repmat(mi, tn, 1), repmat(sqrtsigi, tn, 1))
+    q = q / repmat(np.reshape(np.sum(q, axis=1), (-1, 1)), 1, 7)
+    S = 7 - np.reshape(np.sum(np.less(repmat(temprand, 1, 7),np.cumsum(q, axis=1)), axis=1), (-1, 1)) + 1
 
     # Sample h
-    Hh = np.diag(-np.ones(tn-n), -n) + np.eye(tn)
-    invSh = block_diag(iVh, np.kron(np.eye(int(tn / n - 1)), iSig))
+    Hh = sps.spdiags(-np.ones(tn-n), -n, tn, tn, format='csc') + sps.eye(tn, format='csc')
+    invSh = sps.block_diag((iVh, sps.kron(sps.eye(int(tn / n - 1), format='csc'), iSig, format='csc')), format='csc')
     dconst = np.reshape(np.array([mi[i-1][0] for i in S]), (-1, 1))
-    invOmega = np.diag(1/np.array([sigi[i-1][0] for i in S]), 0)
+    invOmega = sps.spdiags(1/np.array([sigi[i-1][0] for i in S]), 0, tn, tn, format='csc')
     Kh = Hh.T @ invSh @ Hh
-    Ph = sps.csc_matrix(Kh + invOmega)
+    Ph = Kh + invOmega
     Ch = chol(Ph.T).L()
     hhat = spsolve(Ph, invOmega @ (y_star - dconst))
-    h = np.reshape(hhat + spsolve(Ch, np.random.randn(tn, 1)), (-1, 1))
+    h = sps.csc_matrix(np.reshape(hhat + spsolve(Ch, np.random.randn(tn, 1)), (-1, 1)))
 
 
     return h, S
