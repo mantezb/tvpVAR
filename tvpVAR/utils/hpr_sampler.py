@@ -5,26 +5,26 @@ from tvpVAR.utils.tnr import tnr
 from typing import Tuple
 
 
-def hpr_sampler(lam20:np.ndarray, y: np.ndarray, g: np.ndarray, bigSig: np.ndarray, om: np.ndarray,
+def hpr_sampler(lam20: np.ndarray, y: np.ndarray, g: np.ndarray, bigSig: np.ndarray, om: np.ndarray,
                 tau2: np.ndarray, mu=None, pi0=None) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     This function samples omega's and the hyperparameters conditional on all
     other parameters and data.  If no mu's are provided, they are assumed to
     be zero.  If prior probabilities of exclusion (pi0) are provided,
     sampling will proceed without the hierarhical lasso shrinkage.
-    :param lam20:
+    :param lam20: lambda_2
     :param y:
     :param g:
     :param bigSig:
-    :param om:
-    :param tau2:
-    :param mu:
-    :param pi0:
-    :return om, om_st, tau2, lam2:
+    :param om: omega
+    :param tau2: tau^2
+    :param mu: mu
+    :param pi0: prior probabilities of exclusion (optional, for testing only)
+    :return om, om_st, tau2, lam2: omega, omega star, tau^2 and lambda_2
     """
     m = len(om)
     om_st = np.zeros((m, 1))
-    lasso = True
+    lasso = True  # Always use lasso prior unless prior probabilities of exclusion (pi0) are provided
     lam2 = None
 
     if mu is None:
@@ -43,22 +43,22 @@ def hpr_sampler(lam20:np.ndarray, y: np.ndarray, g: np.ndarray, bigSig: np.ndarr
 
     if lasso:
         # sample lam2 first
-        lam2 = np.random.gamma(lam20[0] + m, 1 / lam20[2] + np.sum(tau2, axis=0) / 2)
+        lam2 = np.random.gamma(lam20[0] + m, 1 / (lam20[1] + np.sum(tau2, axis=0) / 2))
 
     for j in range(m):
-        nj = np.hstack((np.array(list(range(j))), np.array(list(range(j + 1, m)))))
+        nj = np.hstack(((np.arange(1, j)), np.arange(j + 1, m)))
         g_nj = g[:, nj]
-        g_j = g[:, j]
+        g_j = g[:, j].reshape((len(g), 1))
         vj = y - g_nj @ om[nj]
 
         # compute posterior quantities
-        tau2j_hat = 1 / tau2[j] + g_j.T @ bigSig @ g_j
+        tau2j_hat = 1 / (1 / tau2[j] + g_j.T @ bigSig @ g_j).ravel()
         muj_hat = tau2j_hat @ (mu[j] / tau2[j] + g_j.T @ bigSig @ vj)
 
         # compute posterior probability of w_j = 0
         ln_xi0 = np.log(1 - pi0[j]) - np.log(pi0[j])
-        ln_xi1 = np.log(norm.cdf(muj_hat) / np.sqrt(tau2j_hat)) + np.log(tau2j_hat) / 2
-        ln_xi2 = np.log(norm.cdf(mu[j]) / np.sqrt(tau2[j])) + np.log(tau2[j]) / 2
+        ln_xi1 = np.log(norm.cdf(muj_hat / np.sqrt(tau2j_hat))) + np.log(tau2j_hat) / 2
+        ln_xi2 = np.log(norm.cdf(mu[j] / np.sqrt(tau2[j]))) + np.log(tau2[j]) / 2
         ln_xi3 = ((muj_hat**2) / tau2j_hat - (mu[j]**2) / tau2[j]) / 2
         pi_j = 1 / (1 + np.exp(ln_xi0 + ln_xi1 - ln_xi2 + ln_xi3))
 

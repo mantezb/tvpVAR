@@ -61,7 +61,7 @@ def ir_vecm_sv(beta, sigma, cidx, t_start, s, a1, p, d, cum_ir=False, tax_first=
         ir[:, :, 0, i] = normkap  # simultaneous response
         for dt in range(s):
             b0t[ltidx] = beta[i][cidx, t_start + dt]
-            bt = (np.reshape(beta[i][bidx, t_start +dt], (k, n)) @ lin.inv(b0t)).T
+            bt = (np.reshape(beta[i][bidx, t_start +dt], (k, n),order='F') @ lin.inv(b0t)).T
             ct = np.hstack((bt[:, k- p * n :], np.zeros((n, n))))
             ct = ct - np.hstack((-(np.eye(n) +bt[:, k - p * n - m:k - p * n + 1] @ d), bt[:, k - p * n: ]))
             f = np.vstack((ct, np.hstack((np.eye(n * p), np.zeros((n * p, n)))))) @ f

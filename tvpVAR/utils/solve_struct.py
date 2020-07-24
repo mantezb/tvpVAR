@@ -48,13 +48,13 @@ def solve_struct(q, psi, case1=True):
     w1 = np.vstack((lin.inv(cdelta1), np.zeros((2,1)), np.array([0,0,1]))) @ \
          np.vstack((np.hstack((np.eye(2), psi)), np.hstack((cgamma1, 1))))
     s1 = np.vstack((np.hstack((cxi1, np.zeros((2,1)))), np.array([0, 0, s2_3])))
-    k1 = lin.lstsq(np.sqrt(s1), w1)
+    k1 = lin.lstsq(np.sqrt(s1), w1, rcond=None)[0]
     z1 = k1.T @ k1 - q
 
     w2 = np.vstack((lin.inv(cdelta2), np.zeros((2, 1)), np.array([0, 0, 1]))) @ \
          np.vstack((np.hstack((np.eye(2), psi)), np.hstack((cgamma2, 1))))
     s2 = np.vstack((np.hstack((cxi2, np.zeros((2, 1)))), np.array([0, 0, s2_3])))
-    k2 = lin.lstsq(np.sqrt(s2), w2)
+    k2 = lin.lstsq(np.sqrt(s2), w2, rcond=None)[0]
     z2 = k2.T @ k2 - q
 
     gamma = None
