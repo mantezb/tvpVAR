@@ -1,8 +1,9 @@
 import numpy as np
 from scipy.stats import norm
-from scipy.linalg import block_diag, cholesky
+from scipy.linalg import block_diag
 from scipy.sparse.linalg import spsolve
 import scipy.sparse as sps
+from sksparse.cholmod import cholesky as chol
 import tvpVAR.utils.settings as settings
 
 import numpy.linalg as lin
@@ -43,10 +44,10 @@ def mvsvrw(y_star: np.ndarray, h: np.ndarray, iSig: np.ndarray, iVh: np.ndarray)
     dconst = np.reshape(np.array([mi[i-1][0] for i in S]), (-1, 1))
     invOmega = np.diag(1/np.array([sigi[i-1][0] for i in S]), 0)
     Kh = Hh.T @ invSh @ Hh
-    Ph = Kh + invOmega
-    Ch = cholesky(Ph)
-    hhat = spsolve(sps.csc_matrix(Ph), invOmega @ (y_star - dconst))
-    h = np.reshape(hhat + spsolve(sps.csc_matrix(Ch), np.random.randn(tn, 1)), (-1, 1))
+    Ph = sps.csc_matrix(Kh + invOmega)
+    Ch = chol(Ph.T).L()
+    hhat = spsolve(Ph, invOmega @ (y_star - dconst))
+    h = np.reshape(hhat + spsolve(Ch, np.random.randn(tn, 1)), (-1, 1))
 
 
     return h, S

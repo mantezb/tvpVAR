@@ -10,13 +10,12 @@ import scipy.sparse as sps
 from scipy.sparse.linalg import lsqr, spsolve
 from scipy.stats import invwishart
 from tqdm import tqdm
-
+from sksparse.cholmod import cholesky as chol
 from tvpVAR.utils.hpr_sampler import hpr_sampler
 from tvpVAR.utils.ineff_factor import ineff_factor
 from tvpVAR.utils.ir_plots import ir_plots
 from tvpVAR.utils.ir_vecm_sv import ir_vecm_sv
 from tvpVAR.utils.mvsvrw import mvsvrw
-# from tvpVAR.utils.scholesky import sparse_cholesky
 # import tvpVAR.utils.settings as settings  # TESTING
 
 # Specification of directories
@@ -131,7 +130,7 @@ S0hIG = np.diag(S0h) / 2  # scale parameter for transition variance r_i, r_i ~ I
 
 # Standard priors for other distributions
 a0 = np.zeros((nk, 1))
-A0 = np.eye(nk)
+A0 = sps.eye(nk)
 phi0 = np.zeros((int(nk * (nk - 1) / 2), 1))  # not found in the paper - should correspond to phi's
 Phi0 = np.eye(len(phi0)) * 10  # not found in the paper - should correspond to phi's
 L01 = 0.1
@@ -142,9 +141,9 @@ M0 = np.ones((nk, 1))  # no ref in paper found
 
 # Initialisations for MCMC sampler
 H_small = np.diag(-np.ones((t - 1)), -1) + np.eye(t)
-H = np.diag(-np.ones((t - 1) * nk), -nk) + np.eye(t * nk)
+H = sps.spdiags(-np.ones((t - 1) * nk), -nk,t*nk,t*nk) + sps.eye(t*nk)
 HH = H.T @ H
-K = block_diag(A0, HH)  # no ref in paper found
+K = sps.block_diag((A0, HH), 'csc')  # no ref in paper found
 g0 = np.ones((nk, 1))  # no ref in paper found
 
 # Starting values
@@ -160,7 +159,7 @@ om[[om_st <= 0]] = 0  # Truncating om_st values to be > 0
 
 alpha = np.random.randn(nk, 1)  # constant coefficients
 gamma = np.random.randn(nk, t)  # time varying coefficients
-Phi = np.eye(nk)  # standard normal CDF values used for pi = Phi(-mu/tau)
+Phi = sps.eye(nk,format='csc')  # standard normal CDF values used for pi = Phi(-mu/tau)
 scl2_1 = np.ones((nk, 1))  # no ref in paper found
 scl2_2 = 1  # no ref in paper found
 loc = np.zeros((nk, 1))  # no ref in paper found
@@ -190,17 +189,17 @@ start = timeit.default_timer()
 
 for isim in tqdm(range(int(burnin + nsims))):
     w[widx] = (x * np.tile(om, (1, t))).T.ravel()
-    wPhi = w @ np.kron(np.eye(t), Phi.T)
+    wPhi = sps.csc_matrix(w) @ sps.kron(sps.eye(t,format='csc'), Phi.T, format='csc')
 
     # Sample alpha | gamma
-    A_hat = A0 + z.T @ bigSig @ z
-    a_hat = spsolve(sps.csc_matrix(A_hat), A0 @ a0 + z.T @ bigSig @ (y - wPhi @ np.reshape(gamma.T.ravel(), (-1, 1))))
-    alpha = np.reshape(a_hat + spsolve(sps.csc_matrix(cholesky(A_hat)), np.random.randn(nk, 1)), (-1, 1))
+    A_hat = sps.csc_matrix(A0 + z.T @ bigSig @ z)
+    a_hat = spsolve(A_hat, A0 @ a0 + z.T @ bigSig @ (y - wPhi @ np.reshape(gamma.T.ravel(), (-1, 1))))
+    alpha = np.reshape(a_hat + spsolve(chol(A_hat.T).L(), np.random.randn(nk, 1)), (-1, 1))
 
     # Sample gamma | alpha
-    Gam_hat = HH + wPhi.T @ bigSig @ wPhi
-    gam_hat = np.reshape(spsolve(sps.csc_matrix(Gam_hat), wPhi.T @ bigSig @ (y - z @ alpha)), (nk, t), order='F')
-    gamma = gam_hat + np.reshape(spsolve(sps.csc_matrix(cholesky(Gam_hat)), np.random.randn(t * nk, 1)), (nk, t),
+    Gam_hat = sps.csc_matrix(HH + wPhi.T @ bigSig @ wPhi)
+    gam_hat = np.reshape(spsolve(Gam_hat, wPhi.T @ bigSig @ (y - z @ alpha)), (nk, t), order='F')
+    gamma = gam_hat + np.reshape(spsolve(chol(Gam_hat.T).L(), np.random.randn(t * nk, 1)), (nk, t),
                                  order='F')
 
     # Do lasso on A0
@@ -209,7 +208,7 @@ for isim in tqdm(range(int(burnin + nsims))):
         A0 = np.diag(np.random.wald(np.sqrt(lam2_a) / np.abs(alpha - a0), lam2_a).ravel())
 
     # Sample Sig_t
-    err = y - np.hstack((z, wPhi)) @ np.vstack((alpha, gamma.T.ravel().reshape(len(gamma.ravel()), 1)))
+    err = y - np.hstack((z, wPhi)) @ np.vstack((alpha, gamma.T.ravel().reshape(len(gamma.ravel()), 1))) # error - sparse
     h, _ = mvsvrw(np.log(err ** 2 + 0.001), h, lin.inv(Sigh), np.eye(n))
     bigSig = np.diag(np.exp(-h.T.ravel()))
     shorth = np.reshape(h, (n, t), order='F')
@@ -238,10 +237,10 @@ for isim in tqdm(range(int(burnin + nsims))):
     wf = w @ f
     f = f.T
 
-    Phi_hat = Phi0 + wf.T @ bigSig @ wf
-    phi_hat = spsolve(sps.csc_matrix(Phi_hat), Phi0 @ phi0 + wf.T @ bigSig @ err)
+    Phi_hat = sps.csc_matrix(Phi0 + wf.T @ bigSig @ wf)
+    phi_hat = spsolve(Phi_hat, Phi0 @ phi0 + wf.T @ bigSig @ err)
     Phi = Phi.T
-    Phi[Phi_idx.T] = phi_hat + spsolve(sps.csc_matrix(cholesky(Phi_hat)), np.random.randn(len(phi_hat), 1))
+    Phi[Phi_idx.T] = phi_hat + spsolve(chol(Phi_hat.T).L(), np.random.randn(len(phi_hat), 1))
     Phi = Phi.T
 
     if lasso_Phi:
@@ -288,9 +287,9 @@ for isim in tqdm(range(int(burnin + nsims))):
     if do_ishift[1]:
         # apply j distn-invariant location transformations to alpha and gamma (e.g. Liu and Sabatti, 2000)
         Om = np.diag(om.ravel()) @ Phi.T
-        Loc_hat = np.eye(nk) + Om.T @ A0 @ Om
-        loc_hat = spsolve(sps.csc_matrix(Loc_hat), np.reshape(gamma[:, 0], (-1, 1)) - Om.T @ A0 @ (alpha - a0))
-        loc = np.reshape(loc_hat + spsolve(sps.csc_matrix(cholesky(Loc_hat)), np.random.randn(nk, 1)), (-1, 1))
+        Loc_hat = sps.csc_matrix(np.eye(nk) + Om.T @ A0 @ Om)
+        loc_hat = spsolve(Loc_hat, np.reshape(gamma[:, 0], (-1, 1)) - Om.T @ A0 @ (alpha - a0))
+        loc = np.reshape(loc_hat + spsolve(chol(Loc_hat.T).L(), np.random.randn(nk, 1)), (-1, 1))
         alpha = alpha + om * loc
         gamma = gamma - np.tile(loc, (1, t))
 
