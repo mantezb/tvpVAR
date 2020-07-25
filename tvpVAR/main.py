@@ -9,6 +9,7 @@ from scipy.linalg import block_diag, ldl
 import scipy.sparse as sps
 from scipy.sparse.linalg import spsolve
 from scipy.stats import invwishart
+from numpy.
 from tqdm import tqdm
 from sksparse.cholmod import cholesky as chol
 from tvpVAR.utils.hpr_sampler import hpr_sampler
@@ -33,11 +34,11 @@ center_data = 1  # standardise series to have mean 0
 
 # Algorithm specific controls
 rand_mu = 0  # sample mu randomly (experimental)
-lasso_alpha = 1  # use a lasso prior on the variance of alpha
+lasso_alpha = 0  # use a lasso prior on the variance of alpha
 lasso_Phi = 1  # use a lasso prior on the state covariances
 do_expansion = 0  # use parameter expansion on om, Phi, gamma
 do_ishift = [1, 1]  # do a distn-invariant translation / scaling of draws
-nsims = 1000  # desired number of MCMC simulations
+nsims = 25000  # desired number of MCMC simulations
 burnin = 0.1 * nsims  # burn-in simulations to discard
 p = 3  # number of AR lags
 
@@ -312,79 +313,10 @@ for isim in tqdm(range(int(burnin + nsims))):
 stop = timeit.default_timer()
 print('Sampling completed after', stop - start)
 
-""" Diagnostics """
+""" Saving results """
 
-mbeta0 = np.mean(s_beta, axis=0).T
-mbeta = np.zeros(mbeta0.shape)
-mbeta[:, :np.count_nonzero(cidx)] = mbeta0[:, cidx]
-mbeta[:, np.count_nonzero(cidx):] = mbeta0[:, bidx]
+np.savez('resultsMCMC.npz', s_alpha=s_alpha, s_gamma=s_gamma, s_beta = s_beta, s_Phi = s_Phi, s_Sig = s_Sig,
+         s_Sigh=s_Sigh, s_lam2=s_lam2, s_tau2=s_tau2, s_mu=s_mu, s_om_st=s_om_st, s_om=s_om, s_adj=s_adj, svsims=svsims,
+         cidx=cidx, bidx=bidx, dscale=dscale, dscale_surp=dscale_surp, x=x, nk=nk, t=t, p=p)
 
-# MCM mixing analysis and beta plots
-ef_om_st = ineff_factor(s_om_st)
-ef_beta = ineff_factor(np.reshape(s_beta, (nk * t, svsims), order='F'))
-eff_factors_df = pd.DataFrame({'Omega_star': ef_om_st, 'Beta': ef_beta})
-# Plotting
-eff_factors_df.boxplot()  # A boxplot of Omega_star and Bet inefficiency factors
-plt.plot(np.max(mbeta, axis=0) - np.min(mbeta, axis=0), marker='o', c='teal', linestyle='dashed')
-plt.ylabel('Max vs min beta')
-plt.show()
-
-# Plot the time invariant/constant param probabilities
-p_tiv0 = np.sum(s_om == 0, axis=1).T.reshape((1, len(s_om == 0))) / svsims
-p_tiv = np.zeros(p_tiv0.shape)
-p_tiv[:np.count_nonzero(cidx)] = p_tiv0[cidx]
-p_tiv[np.count_nonzero(cidx):] = p_tiv0[bidx]
-# Plotting
-plt.plot(p_tiv, marker='o', c='teal', linestyle='dashed')
-plt.ylabel('TIV probability')
-plt.show()
-
-# Impulse responses
-scale_adj = dscale.T * (1 / dscale)
-per = np.arange(1959.5, 2011.75, 0.25)
-t_start = np.argwhere(per == 2000)
-s = 20
-ab2, c, svars, ir, err = ir_vecm_sv(s_beta, s_Sig, cidx, t_start, s, 2.08 * dscale[2] / dscale[0], p,
-                                    np.diag((1 / dscale_surp).ravel()) \
-                                    * np.array([[1, -1, 0], [0, 1, -1]]) * np.diag(dscale.ravel()))
-nerr = np.count_nonzero(err)
-bands = np.floor(np.array([0.16, 0.5, 0.85]) * (svsims - nerr))
-ir_sort = np.sort(ir[:, :, :, ~err], 3)
-
-# make ir plots
-""" Generate Impulse Response Plots """
-
-plt.plot(np.squeeze(np.arange(0, s), ir_sort[0, 1, :, bands[[0, 3]]]) * scale_adj[0, 1], c='cadetblue', linewidth=2,
-         linestyle='dashed')
-plt.plot(np.squeeze(np.arange(0, s), ir_sort[0, 1, :, bands[[2]]]) * scale_adj[0, 1], c='teal', linewidth=3)
-plt.title('Impulse Response of variable x to y')
-plt.ylabel('Impulse Response')
-plt.xlabel('Time (in quarters)')
-plt.show()
-
-plt.plot(np.squeeze(np.arange(0, s), ir_sort[1, 1, :, bands[[0, 3]]]) * scale_adj[0, 1], c='cadetblue', linewidth=2,
-         linestyle='dashed')
-plt.plot(np.squeeze(np.arange(0, s), ir_sort[1, 1, :, bands[[2]]]) * scale_adj[0, 1], c='teal', linewidth=3)
-plt.title('Impulse Response of variable y to y')
-plt.ylabel('Impulse Response')
-plt.xlabel('Time (in quarters)')
-plt.show()
-
-plt.plot(np.squeeze(np.arange(0, s), ir_sort[2, 1, :, bands[[0, 3]]]) * scale_adj[0, 1], c='cadetblue', linewidth=2,
-         linestyle='dashed')
-plt.plot(np.squeeze(np.arange(0, s), ir_sort[2, 1, :, bands[[2]]]) * scale_adj[0, 1], c='teal', linewidth=3)
-plt.title('Impulse Response of variable z to y')
-plt.ylabel('Impulse Response')
-plt.xlabel('Time (in quarters)')
-plt.show()
-
-plt.plot(np.squeeze(np.arange(0, s), ir_sort[0, 1, :, bands[[0, 3]]]) * scale_adj[0, 1], c='cadetblue', linewidth=2,
-         linestyle='dashed')
-plt.plot(np.squeeze(np.arange(0, s), ir_sort[1, 1, :, bands[[2]]]) * scale_adj[0, 1], c='teal', linewidth=3)
-plt.title('Impulse Response of variable y to y, different confidence bands')
-plt.ylabel('Impulse Response')
-plt.xlabel('Time (in quarters)')
-plt.show()
-
-# Plot using a function
-ir_plots(ir_sort, bands, scale_adj, s)
+# Use  diagnostics.py and analytics.py

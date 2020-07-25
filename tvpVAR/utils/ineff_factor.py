@@ -7,7 +7,7 @@ import warnings
 def ineff_factor1(x, lag):
 
     if lag == 0:
-        lag = np.max(get_lag(x), 20)
+        lag = np.max([get_lag(x), 20])
     r, _ = _get_acf(x, nlags=lag)
     ef1 = 1 + 2 * np.sum(r[1:], axis=0)
 
@@ -21,7 +21,7 @@ def acorr_simple(x, lag):
     for i in range(lag):
         y = x[:(-i - 1)]
         z = x[(i + 1):]
-        r[i] = np.mean((y-np.mean(x,axis=0)) * (z - np.mean(z - np.mean(x, axis=0))), axis=0)
+        r[i] = np.mean((y-np.mean(x, axis=0)) * (z - np.mean(z - np.mean(x, axis=0))), axis=0)
 
     r = np.vstack((1, r / np.var(x, axis=0)))
 
@@ -76,7 +76,7 @@ def ineff_factor(x: np.ndarray, lag=None) -> Tuple[np.ndarray,np.ndarray]:
     :return:
     """
     n = x.shape[0]
-    ef = np.zeros((0, 1))
+    ef = np.zeros((n, 1))
 
     if lag is None:
         lag = np.zeros((n, 1))
