@@ -13,10 +13,10 @@ from sksparse.cholmod import cholesky as chol
 from tvpVAR.utils.hpr_sampler import hpr_sampler
 from tvpVAR.utils.mvsvrw import mvsvrw
 from tvpVAR.utils.utils import repmat
-import tvpVAR.utils.settings as settings  # TESTING
-import scipy
+#import tvpVAR.utils.settings as settings  # TESTING
 
-settings.init()
+
+#settings.init()
 
 # Specification of directories
 base_path = path.dirname(__file__)  # Location of the main.py
@@ -181,14 +181,14 @@ s_om_st = np.zeros((nk, svsims))
 s_om = np.zeros((nk, svsims))
 s_adj = np.zeros((nk, 3, svsims))  # hardcoded 3 - double check!
 
-rand_om_st = settings.rand_om_st.copy()
-rand_n_39 = settings.rand_n[0:39].copy()
-rand_n_211 = settings.rand_n[0:211].copy()
-rand_n = settings.rand_n.copy()
-rand_tau2 = settings.rand_tau2.copy()
-rand_sigh = settings.rand_sigh.copy()
-rand_om = rand_om_st.copy()
-rand_om[[rand_om_st<=0]] = 0
+#rand_om_st = settings.rand_om_st.copy() # TESTING
+#rand_n_39 = settings.rand_n[0:39].copy() # TESTING
+#rand_n_211 = settings.rand_n[0:211].copy() # TESTING
+#rand_n = settings.rand_n.copy() # TESTING
+#rand_tau2 = settings.rand_tau2.copy() # TESTING
+#rand_sigh = settings.rand_sigh.copy() # TESTING
+#rand_om = rand_om_st.copy() # TESTING
+#rand_om[[rand_om_st<=0]] = 0 # TESTING
 
 
 " MCMC Sampler"
@@ -199,28 +199,28 @@ start = timeit.default_timer()
 
 for isim in tqdm(range(int(burnin + nsims))):
     w[widx] = (x * np.tile(om, (1, t))).T.ravel()
-    w[widx] = (x * np.tile(rand_om, (1, t))).T.ravel() # TESTING
+    #w[widx] = (x * np.tile(rand_om, (1, t))).T.ravel() # TESTING
     wPhi = sps.csc_matrix(w) @ sps.kron(sps.eye(t, format='csc'), Phi.T, format='csc')
 
     # Sample alpha | gamma
     A_hat = sps.csc_matrix(A0 + z.T @ bigSig @ z)
-    gamma = rand_n.reshape((nk,t), order='F')
+    #gamma = rand_n.reshape((nk,t), order='F') TESTING
     a_hat = sps.csc_matrix(spsolve(A_hat, A0 @ a0 + z.T @ bigSig @ (y - wPhi @ gamma.T.reshape((-1, 1)))))
     alpha = (a_hat + sps.csc_matrix(spsolve(chol(A_hat, ordering_method='natural').L().T, np.random.randn(nk, 1)))).T
-    alpha = (a_hat + sps.csc_matrix(spsolve(chol(A_hat, ordering_method='natural').L().T, rand_n_39))).T # TESTING
+    #alpha = (a_hat + sps.csc_matrix(spsolve(chol(A_hat, ordering_method='natural').L().T, rand_n_39))).T # TESTING
 
     # Sample gamma | alpha
     Gam_hat = HH + wPhi.T @ bigSig @ wPhi
     gam_hat = sps.csc_matrix(np.reshape(spsolve(Gam_hat, wPhi.T @ bigSig @ (y - z @ alpha)), (nk, t), order='F'))
     gamma = gam_hat + sps.csc_matrix(np.reshape(spsolve(chol(Gam_hat, ordering_method='natural').L().T, np.random.randn(t * nk, 1)), (nk, t),
                                  order='F'))
-    gamma = gam_hat + sps.csc_matrix(np.reshape(spsolve(chol(Gam_hat, ordering_method='natural').L().T, rand_n), (nk, t),
-                                                order='F')) #TESTING
+   # gamma = gam_hat + sps.csc_matrix(np.reshape(spsolve(chol(Gam_hat, ordering_method='natural').L().T, rand_n), (nk, t),
+                                              #  order='F')) #TESTING
 
     # Do lasso on A0
     if lasso_alpha:
         lam2_a = np.random.gamma(lam20[0] + nk, 1 / (lam20[1] + np.sum(1 / np.diag(A0.toarray())) / 2))
-        lam2_a = 2.17 # TESTING ONLY
+        #lam2_a = 2.17 # TESTING ONLY
         A0 = sps.spdiags(np.random.wald(np.sqrt(lam2_a) / np.abs(alpha - a0).toarray(), lam2_a).ravel(), 0, nk, nk, format='csc')
 
     # Sample Sig_t
@@ -231,7 +231,7 @@ for isim in tqdm(range(int(burnin + nsims))):
     errh = shorth[:, 1:] - shorth[:, :-1]
     sseh = errh @ errh.T
     Sigh = invwishart.rvs(s0h + t - 1, S0h + sseh)  # Correlated volatilities IW(df, scale)
-    Sigh = rand_sigh # TESTING
+    #Sigh = rand_sigh # TESTING
     # Sample om, om_st, tau2, lam2
     g[gidx] = (sps.csc_matrix(x).multiply((Phi.T @ gamma))).reshape((1, -1))
 
@@ -257,7 +257,7 @@ for isim in tqdm(range(int(burnin + nsims))):
     phi_hat = spsolve(Phi_hat, Phi0 @ phi0 + wf.T @ bigSig @ err)
     Phi = Phi.T
     Phi[Phi_idx.T] = phi_hat + spsolve(chol(Phi_hat,ordering_method='natural').L().T, np.random.randn(len(phi_hat), 1))
-    Phi[Phi_idx.T] = phi_hat + spsolve(chol(Phi_hat, ordering_method='natural').L().T, rand_n[0:741]) # TESTING
+    #Phi[Phi_idx.T] = phi_hat + spsolve(chol(Phi_hat, ordering_method='natural').L().T, rand_n[0:741]) # TESTING
     Phi = Phi.T
 
     if lasso_Phi:
@@ -277,7 +277,7 @@ for isim in tqdm(range(int(burnin + nsims))):
 
     if do_ishift[0]:
         # Apply one distn - invariant scale transformation to lam2 and tau2 (e.g. Liu and Sabatti, 2000)
-        scale =  1 / (lam20[1] * lam2 + np.sum((om_st - mu) ** 2 / tau2) / 2)
+        scale = 1 / (lam20[1] * lam2 + np.sum((om_st - mu) ** 2 / tau2) / 2)
         if np.isnan(scale):
             scl2_2 = 1
         else:
@@ -320,22 +320,22 @@ for isim in tqdm(range(int(burnin + nsims))):
     if do_ishift[1]:
         # apply j distn-invariant location transformations to alpha and gamma (e.g. Liu and Sabatti, 2000)
         Om = sps.spdiags(om.ravel(), 0, om.shape[0], om.shape[0], format='csc') @ Phi.T
-        Om = sps.spdiags(rand_om.ravel(), 0, om.shape[0], om.shape[0], format='csc') @ Phi.T # TESTING
+        #Om = sps.spdiags(rand_om.ravel(), 0, om.shape[0], om.shape[0], format='csc') @ Phi.T # TESTING
         Loc_hat = sps.eye(nk, format='csc') + Om.T @ A0 @ Om
         loc_hat = spsolve(Loc_hat, np.reshape(gamma[:, 0], (-1, 1)) - Om.T @ A0 @ (alpha - a0))
         loc = np.reshape(loc_hat + spsolve(chol(Loc_hat, ordering_method='natural').L().T, np.random.randn(nk, 1)), (-1, 1))
-        loc = np.reshape(loc_hat + spsolve(chol(Loc_hat, ordering_method='natural').L().T, rand_n_39),
-                         (-1, 1)) # TESTING
-        #alpha = alpha + sps.csc_matrix(om * loc) # DISABLE FOR TESTING
-        alpha = alpha + sps.csc_matrix(rand_om * loc) # TESTING
+        #loc = np.reshape(loc_hat + spsolve(chol(Loc_hat, ordering_method='natural').L().T, rand_n_39),
+                        # (-1, 1)) # TESTING
+        alpha = alpha + sps.csc_matrix(om * loc) # DISABLE FOR TESTING
+        #alpha = alpha + sps.csc_matrix(rand_om * loc) # TESTING
         gamma = gamma - sps.csc_matrix(repmat(loc, 1, t))
 
     # Save draws
-    if True: # TESTING
-    #if (isim + 1 > burnin) and (np.mod(isim + 1 - burnin, simstep) == 0): # DISABLE FOR TESTING
+    #if True: # TESTING
+    if (isim + 1 > burnin) and (np.mod(isim + 1 - burnin, simstep) == 0): # DISABLE FOR TESTING
 
         isave = int((isim + 1 - burnin) / simstep - 1)
-        isave = 0 # TESTING
+       # isave = 0 # TESTING
         s_alpha[:, isave] = alpha.toarray().ravel()
         s_gamma[:, :, isave] = (sps.spdiags(np.sqrt(g0.toarray()).ravel(), 0, g0.shape[0], g0.shape[0], format='csc') @ gamma).toarray()
         s_beta[:, :, isave] = (repmat(alpha, 1, t) + sps.spdiags(om.ravel(), 0, om.shape[0], om.shape[0], format='csc') @ Phi.T @ gamma).toarray()

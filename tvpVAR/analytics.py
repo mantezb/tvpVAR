@@ -2,7 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tvpVAR.utils.ir_vecm_sv import ir_vecm_sv
 from tvpVAR.utils.ir_plots import ir_plots
+#import tvpVAR.utils.settings as settings TESTING
 
+#settings.init() TESTING
 
 # Load the relevant np.ndarrays from MCMC sampler results file saved in .npz format
 data = np.load('resultsMCMC_v2.npz')
@@ -15,6 +17,9 @@ svsims = data['svsims'].item()
 dscale = data['dscale'].reshape((-1, 1))
 dscale_surp = data['dscale_surp'].reshape((-1, 1))
 p = data['p'].item()
+
+#s_beta = settings.beta_s # TESTING
+#s_Sig = settings.sig_s # TESTING
 
 # Plot the time invariant/constant param probabilities
 p_tiv0 = np.sum(s_om == 0, axis=1)/ svsims
@@ -41,38 +46,43 @@ ir_sort = np.sort(ir[:, :, :, ~err.astype('bool').ravel()], 3)
 
 """ Generate Impulse Response Plots """
 # Plot using a function
-ir_plots(ir_sort, bands, scale_adj, s)
-plt.show()
+#ir_plots(ir_sort, bands, scale_adj, s)
+#plt.show()
 
 # make ir plots
-
-plt.plot((ir_sort[0, 1, :, bands[[0, 2]]] * scale_adj[0, 1]).T, c='cadetblue', linewidth=2,
+conf1 = (ir_sort[0, 1, :, bands[[0, 2]]] * scale_adj[0, 1]).T
+plt.plot(conf1, c='cadetblue', linewidth=2,
          linestyle='dashed')
+plt.fill_between(np.arange(s+1), conf1[:, 0], conf1[:, 1], color='cadetblue', alpha=0.2)
 plt.plot((ir_sort[0, 1, :, bands[[1]]] * scale_adj[0, 1]).T, c='teal', linewidth=3)
 plt.title('Impulse Response of Variable x to y')
 plt.ylabel('Impulse Response')
 plt.xlabel('Time (in quarters)')
 plt.show()
 
-plt.plot((ir_sort[1, 1, :, bands[[0, 2]]] * scale_adj[0, 1]).T, c='cadetblue', linewidth=2,
+conf2 = (ir_sort[1, 1, :, bands[[0, 2]]] * scale_adj[1, 1]).T
+plt.plot(conf2, c='cadetblue', linewidth=2,
          linestyle='dashed')
-plt.plot((ir_sort[1, 1, :, bands[[1]]] * scale_adj[0, 1]).T, c='teal', linewidth=3)
+plt.fill_between(np.arange(s+1), conf2[:, 0], conf2[:, 1], color='cadetblue', alpha=0.2)
+plt.plot((ir_sort[1, 1, :, bands[[1]]] * scale_adj[1, 1]).T, c='teal', linewidth=3)
 plt.title('Impulse Response of variable y to y')
 plt.ylabel('Impulse Response')
 plt.xlabel('Time (in quarters)')
 plt.show()
 
-plt.plot((ir_sort[2, 1, :, bands[[0, 2]]] * scale_adj[0, 1]).T, c='cadetblue', linewidth=2,
+conf3 = (ir_sort[2, 1, :, bands[[0, 2]]] * scale_adj[2, 1]).T
+plt.plot(conf3, c='cadetblue', linewidth=2,
          linestyle='dashed')
-plt.plot((ir_sort[2, 1, :, bands[[1]]] * scale_adj[0, 1]).T, c='teal', linewidth=3)
+plt.fill_between(np.arange(s+1), conf3[:, 0], conf3[:, 1], color='cadetblue', alpha=0.2)
+plt.plot((ir_sort[2, 1, :, bands[[1]]] * scale_adj[2, 1]).T, c='teal', linewidth=3)
 plt.title('Impulse Response of variable z to y')
 plt.ylabel('Impulse Response')
 plt.xlabel('Time (in quarters)')
 plt.show()
 
-plt.plot((ir_sort[0, 1, :, bands[[0, 2]]] * scale_adj[0, 1]).T, c='cadetblue', linewidth=2,
+plt.plot((ir_sort[0, 1, :, bands[[1]]] * scale_adj[0, 1]).T, c='cadetblue', linewidth=2,
          linestyle='dashed')
-plt.plot((ir_sort[1, 1, :, bands[[1]]] * scale_adj[0, 1]).T, c='teal', linewidth=3)
+plt.plot((ir_sort[1, 1, :, bands[[1]]] * scale_adj[1, 1]).T, c='teal', linewidth=3)
 plt.title('Impulse Response of variable y to y, different confidence bands')
 plt.ylabel('Impulse Response')
 plt.xlabel('Time (in quarters)')

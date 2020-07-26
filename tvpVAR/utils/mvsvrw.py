@@ -1,12 +1,10 @@
 import numpy as np
 from scipy.stats import norm
-from scipy.linalg import block_diag
 from scipy.sparse.linalg import spsolve
 import scipy.sparse as sps
 from sksparse.cholmod import cholesky as chol
 from tvpVAR.utils.utils import repmat
-import tvpVAR.utils.settings as settings # TESTING
-import numpy.linalg as lin
+#import tvpVAR.utils.settings as settings # TESTING
 from typing import Tuple
 
 
@@ -32,7 +30,7 @@ def mvsvrw(y_star: np.ndarray, h: sps.csc_matrix, iSig: sps.csc_matrix, iVh: sps
 
     # Sample S from a 7-point discrete distribution
     temprand = np.random.rand(tn, 1)
-    temprand = settings.rand_temprand # TESTING
+    #temprand = settings.rand_temprand # TESTING
 
     q = repmat(pi, tn, 1) * norm.pdf(repmat(y_star, 1, 7),
                                         repmat(h, 1, 7).toarray() + repmat(mi, tn, 1), repmat(sqrtsigi, tn, 1))
@@ -49,7 +47,7 @@ def mvsvrw(y_star: np.ndarray, h: sps.csc_matrix, iSig: sps.csc_matrix, iVh: sps
     Ch = chol(Ph, ordering_method='natural').L().T
     hhat = spsolve(Ph, invOmega @ (y_star - dconst))
     h = sps.csc_matrix(np.reshape(hhat + spsolve(Ch, np.random.randn(tn, 1)), (-1, 1)))
-    h = sps.csc_matrix(np.reshape(hhat + spsolve(Ch, settings.rand_n[0:633]), (-1, 1))) # TESTING
+    #h = sps.csc_matrix(np.reshape(hhat + spsolve(Ch, settings.rand_n[0:633]), (-1, 1))) # TESTING
 
 
     return h, S
