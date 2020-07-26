@@ -1,24 +1,22 @@
 import timeit
 from os import path
 
-import matplotlib.pyplot as plt
 import numpy as np
 import numpy.linalg as lin
 import pandas as pd
-from scipy.linalg import block_diag, ldl
+from scipy.linalg import ldl
 import scipy.sparse as sps
 from scipy.sparse.linalg import spsolve
 from scipy.stats import invwishart
-from numpy.
 from tqdm import tqdm
 from sksparse.cholmod import cholesky as chol
 from tvpVAR.utils.hpr_sampler import hpr_sampler
-from tvpVAR.utils.ineff_factor import ineff_factor
-from tvpVAR.utils.ir_plots import ir_plots
-from tvpVAR.utils.ir_vecm_sv import ir_vecm_sv
 from tvpVAR.utils.mvsvrw import mvsvrw
 from tvpVAR.utils.utils import repmat
-# import tvpVAR.utils.settings as settings  # TESTING
+import tvpVAR.utils.settings as settings  # TESTING
+import scipy
+
+settings.init()
 
 # Specification of directories
 base_path = path.dirname(__file__)  # Location of the main.py
@@ -183,6 +181,16 @@ s_om_st = np.zeros((nk, svsims))
 s_om = np.zeros((nk, svsims))
 s_adj = np.zeros((nk, 3, svsims))  # hardcoded 3 - double check!
 
+rand_om_st = settings.rand_om_st.copy()
+rand_n_39 = settings.rand_n[0:39].copy()
+rand_n_211 = settings.rand_n[0:211].copy()
+rand_n = settings.rand_n.copy()
+rand_tau2 = settings.rand_tau2.copy()
+rand_sigh = settings.rand_sigh.copy()
+rand_om = rand_om_st.copy()
+rand_om[[rand_om_st<=0]] = 0
+
+
 " MCMC Sampler"
 
 # Final initialisations
@@ -191,37 +199,44 @@ start = timeit.default_timer()
 
 for isim in tqdm(range(int(burnin + nsims))):
     w[widx] = (x * np.tile(om, (1, t))).T.ravel()
+    w[widx] = (x * np.tile(rand_om, (1, t))).T.ravel() # TESTING
     wPhi = sps.csc_matrix(w) @ sps.kron(sps.eye(t, format='csc'), Phi.T, format='csc')
 
     # Sample alpha | gamma
     A_hat = sps.csc_matrix(A0 + z.T @ bigSig @ z)
+    gamma = rand_n.reshape((nk,t), order='F')
     a_hat = sps.csc_matrix(spsolve(A_hat, A0 @ a0 + z.T @ bigSig @ (y - wPhi @ gamma.T.reshape((-1, 1)))))
-    alpha = (a_hat + sps.csc_matrix(spsolve(chol(A_hat.T).L(), np.random.randn(nk, 1)))).T.tocsc()
+    alpha = (a_hat + sps.csc_matrix(spsolve(chol(A_hat, ordering_method='natural').L().T, np.random.randn(nk, 1)))).T
+    alpha = (a_hat + sps.csc_matrix(spsolve(chol(A_hat, ordering_method='natural').L().T, rand_n_39))).T # TESTING
 
     # Sample gamma | alpha
     Gam_hat = HH + wPhi.T @ bigSig @ wPhi
     gam_hat = sps.csc_matrix(np.reshape(spsolve(Gam_hat, wPhi.T @ bigSig @ (y - z @ alpha)), (nk, t), order='F'))
-    gamma = gam_hat + sps.csc_matrix(np.reshape(spsolve(chol(Gam_hat.T).L(), np.random.randn(t * nk, 1)), (nk, t),
+    gamma = gam_hat + sps.csc_matrix(np.reshape(spsolve(chol(Gam_hat, ordering_method='natural').L().T, np.random.randn(t * nk, 1)), (nk, t),
                                  order='F'))
+    gamma = gam_hat + sps.csc_matrix(np.reshape(spsolve(chol(Gam_hat, ordering_method='natural').L().T, rand_n), (nk, t),
+                                                order='F')) #TESTING
 
     # Do lasso on A0
     if lasso_alpha:
         lam2_a = np.random.gamma(lam20[0] + nk, 1 / (lam20[1] + np.sum(1 / np.diag(A0.toarray())) / 2))
+        lam2_a = 2.17 # TESTING ONLY
         A0 = sps.spdiags(np.random.wald(np.sqrt(lam2_a) / np.abs(alpha - a0).toarray(), lam2_a).ravel(), 0, nk, nk, format='csc')
 
     # Sample Sig_t
     err = y - sps.hstack((z, wPhi), format = 'csc') @ sps.vstack((alpha, gamma.T.reshape((-1, 1))))  # error - sparse
-    h, _ = mvsvrw(np.log(err.power(2).data + 0.001).reshape((-1,1)), h, sps.csc_matrix(lin.inv(Sigh)), sps.eye(n, format='csc'))
+    h, _ = mvsvrw(np.log(err.power(2).data + 0.001).reshape((-1, 1)), h, sps.csc_matrix(lin.inv(Sigh)), sps.eye(n, format='csc'))
     bigSig = sps.spdiags(np.exp(-h.reshape((-1, 1)).data), 0, t * n, t * n, format='csc')
     shorth = np.reshape(h, (n, t), order='F').tocsc()
     errh = shorth[:, 1:] - shorth[:, :-1]
     sseh = errh @ errh.T
     Sigh = invwishart.rvs(s0h + t - 1, S0h + sseh)  # Correlated volatilities IW(df, scale)
+    Sigh = rand_sigh # TESTING
     # Sample om, om_st, tau2, lam2
     g[gidx] = (sps.csc_matrix(x).multiply((Phi.T @ gamma))).reshape((1, -1))
 
-    om, om_st, tau2, lam2 = hpr_sampler(lam20, (y - z @ alpha).tocsc(), g.T.tocsc(), bigSig, om, tau2, mu)
-
+    om, om_st, tau2, lam2 = hpr_sampler(lam20, (y - z @ alpha), g.T, bigSig, om, tau2, mu) # DISABLE FOR TESTING
+    #om, om_st, tau2, lam2 = hpr_sampler(lam20, (y - z @ alpha), g.T, bigSig, rand_om, rand_tau2, mu) # TESTING
     if rand_mu:
         # Sample mu
         M_hat = 1 / (M0.toarray() + 1 / tau2)
@@ -238,17 +253,17 @@ for isim in tqdm(range(int(burnin + nsims))):
     err = y - sps.hstack((z, w)) @ sps.vstack((alpha, gamma.T.reshape((-1, 1))))
     wf = w @ f
     f = f.T
-
     Phi_hat = sps.csc_matrix(Phi0 + wf.T @ bigSig @ wf)
     phi_hat = spsolve(Phi_hat, Phi0 @ phi0 + wf.T @ bigSig @ err)
     Phi = Phi.T
-    Phi[Phi_idx.T] = phi_hat + spsolve(chol(Phi_hat.T).L(), np.random.randn(len(phi_hat), 1))
+    Phi[Phi_idx.T] = phi_hat + spsolve(chol(Phi_hat,ordering_method='natural').L().T, np.random.randn(len(phi_hat), 1))
+    Phi[Phi_idx.T] = phi_hat + spsolve(chol(Phi_hat, ordering_method='natural').L().T, rand_n[0:741]) # TESTING
     Phi = Phi.T
 
     if lasso_Phi:
         # Do lasso on Phi0
         lam2_f = np.random.gamma(lam20[0] + phi0.shape[0], 1 / (lam20[1] + np.sum(1 / np.diag(Phi0.toarray())) / 2))
-        Phi0 = sps.spdiags(np.random.wald(np.sqrt(lam2_f) / np.abs(np.array(Phi[Phi_idx]).ravel() - phi0.toarray().ravel()),
+        Phi0 = sps.spdiags(np.random.wald(np.sqrt(lam2_f) / np.abs(np.array(Phi.T[Phi_idx.T]).ravel() - phi0.toarray().ravel()),
                                           lam2_f), 0, phi0.shape[0], phi0.shape[0], format='csc')
 
 
@@ -262,46 +277,71 @@ for isim in tqdm(range(int(burnin + nsims))):
 
     if do_ishift[0]:
         # Apply one distn - invariant scale transformation to lam2 and tau2 (e.g. Liu and Sabatti, 2000)
-        scl2_2 = np.random.gamma(lam20[0] + nk / 2,
+        scale =  1 / (lam20[1] * lam2 + np.sum((om_st - mu) ** 2 / tau2) / 2)
+        if np.isnan(scale):
+            scl2_2 = 1
+        else:
+            scl2_2 = np.random.gamma(lam20[0] + nk / 2,
                                  1 / (lam20[1] * lam2 + np.sum((om_st - mu) ** 2 / tau2) / 2))
         tau2 = tau2 / scl2_2
 
         if rand_mu:
             # one more time for lam2_mu, M0
-            scl2_2m = np.random.gamma(lam20[0] + nk / 2, 1 / (lam20[1] * lam2_mu + np.sum((mu - mu0) ** 2 * M0.toarray()) / 2))
+            scale = 1 / (lam20[1] * lam2_mu + np.sum((mu - mu0) ** 2 * M0.toarray()) / 2)
+            if np.isnan(scale):
+                scl2_2m = 1
+            else:
+                scl2_2m = np.random.gamma(lam20[0] + nk / 2, 1 / (lam20[1] * lam2_mu + np.sum((mu - mu0) ** 2 * M0.toarray()) / 2))
+
             M0 = M0.dot(scl2_2m)
 
         if lasso_alpha:
             # one more for lam2_a, A0
-            scl2_2a = np.random.gamma(lam20[0] + nk / 2,
+            scale = 1 / (lam20[1] * lam2_a + np.sum((alpha - a0).power(2).toarray().ravel() * np.diag(A0.toarray())) / 2)
+            if np.isnan(scale):
+                scl2_2a = 1
+            else:
+                scl2_2a = np.random.gamma(lam20[0] + nk / 2,
                                       1 / (lam20[1] * lam2_a + np.sum((alpha - a0).power(2).toarray().ravel() * np.diag(A0.toarray())) / 2))
+
             A0 = A0.dot(scl2_2a)
 
         if lasso_Phi:
             # one more for lam2_f, Phi0
-            scl2_2f = np.random.gamma(lam20[0] + phi0.shape[0] / 2,
-                        1 / (lam20[1] * lam2_f + np.sum((np.array(Phi[Phi_idx]).ravel() - phi0.toarray().ravel()) ** 2 * np.diag(Phi0.toarray())) / 2))
+            scale = 1 / (lam20[1] * lam2_f + np.sum((np.array(Phi.T[Phi_idx.T]).ravel() - phi0.toarray().ravel()) ** 2 * np.diag(Phi0.toarray())) / 2)
+            if np.isnan(scale):
+                scl2_2f = 1
+            else:
+                scl2_2f = np.random.gamma(lam20[0] + phi0.shape[0] / 2,
+                        1 / (lam20[1] * lam2_f + np.sum((np.array(Phi.T[Phi_idx.T]).ravel() - phi0.toarray().ravel()) ** 2 * np.diag(Phi0.toarray())) / 2))
+
             Phi0 = Phi0.dot(scl2_2f)
 
     if do_ishift[1]:
         # apply j distn-invariant location transformations to alpha and gamma (e.g. Liu and Sabatti, 2000)
         Om = sps.spdiags(om.ravel(), 0, om.shape[0], om.shape[0], format='csc') @ Phi.T
+        Om = sps.spdiags(rand_om.ravel(), 0, om.shape[0], om.shape[0], format='csc') @ Phi.T # TESTING
         Loc_hat = sps.eye(nk, format='csc') + Om.T @ A0 @ Om
         loc_hat = spsolve(Loc_hat, np.reshape(gamma[:, 0], (-1, 1)) - Om.T @ A0 @ (alpha - a0))
-        loc = np.reshape(loc_hat + spsolve(chol(Loc_hat.T).L(), np.random.randn(nk, 1)), (-1, 1))
-        alpha = alpha + sps.csc_matrix(om * loc)
+        loc = np.reshape(loc_hat + spsolve(chol(Loc_hat, ordering_method='natural').L().T, np.random.randn(nk, 1)), (-1, 1))
+        loc = np.reshape(loc_hat + spsolve(chol(Loc_hat, ordering_method='natural').L().T, rand_n_39),
+                         (-1, 1)) # TESTING
+        #alpha = alpha + sps.csc_matrix(om * loc) # DISABLE FOR TESTING
+        alpha = alpha + sps.csc_matrix(rand_om * loc) # TESTING
         gamma = gamma - sps.csc_matrix(repmat(loc, 1, t))
 
     # Save draws
-    if (isim + 1 > burnin) and (np.mod(isim + 1 - burnin, simstep) == 0):
+    if True: # TESTING
+    #if (isim + 1 > burnin) and (np.mod(isim + 1 - burnin, simstep) == 0): # DISABLE FOR TESTING
 
         isave = int((isim + 1 - burnin) / simstep - 1)
+        isave = 0 # TESTING
         s_alpha[:, isave] = alpha.toarray().ravel()
         s_gamma[:, :, isave] = (sps.spdiags(np.sqrt(g0.toarray()).ravel(), 0, g0.shape[0], g0.shape[0], format='csc') @ gamma).toarray()
         s_beta[:, :, isave] = (repmat(alpha, 1, t) + sps.spdiags(om.ravel(), 0, om.shape[0], om.shape[0], format='csc') @ Phi.T @ gamma).toarray()
         s_Phi[:, :, isave] = (sps.spdiags(np.sqrt(g0.toarray()).ravel(), 0, g0.shape[0], g0.shape[0], format='csc') @ Phi.T @
                               sps.spdiags(np.sqrt(1 / g0.toarray()).ravel(), 0, g0.shape[0], g0.shape[0], format='csc')).toarray()
-        s_Sig[:, :, isave] = np.exp(shorth.data).reshape((n,t), order='F') # Sig
+        s_Sig[:, :, isave] = np.exp(shorth.data).reshape((n, t), order='F') # Sig
         s_Sigh[:, :, isave] = Sigh
         s_lam2[:, isave] = lam2
         s_tau2[:, isave] = tau2.ravel()
@@ -315,7 +355,7 @@ print('Sampling completed after', stop - start)
 
 """ Saving results """
 
-np.savez('resultsMCMC.npz', s_alpha=s_alpha, s_gamma=s_gamma, s_beta = s_beta, s_Phi = s_Phi, s_Sig = s_Sig,
+np.savez('resultsMCMC_v2.npz', s_alpha=s_alpha, s_gamma=s_gamma, s_beta=s_beta, s_Phi=s_Phi, s_Sig=s_Sig,
          s_Sigh=s_Sigh, s_lam2=s_lam2, s_tau2=s_tau2, s_mu=s_mu, s_om_st=s_om_st, s_om=s_om, s_adj=s_adj, svsims=svsims,
          cidx=cidx, bidx=bidx, dscale=dscale, dscale_surp=dscale_surp, x=x, nk=nk, t=t, p=p)
 

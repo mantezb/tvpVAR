@@ -5,8 +5,7 @@ from scipy.sparse.linalg import spsolve
 import scipy.sparse as sps
 from sksparse.cholmod import cholesky as chol
 from tvpVAR.utils.utils import repmat
-import tvpVAR.utils.settings as settings
-
+import tvpVAR.utils.settings as settings # TESTING
 import numpy.linalg as lin
 from typing import Tuple
 
@@ -33,11 +32,12 @@ def mvsvrw(y_star: np.ndarray, h: sps.csc_matrix, iSig: sps.csc_matrix, iVh: sps
 
     # Sample S from a 7-point discrete distribution
     temprand = np.random.rand(tn, 1)
+    temprand = settings.rand_temprand # TESTING
 
     q = repmat(pi, tn, 1) * norm.pdf(repmat(y_star, 1, 7),
                                         repmat(h, 1, 7).toarray() + repmat(mi, tn, 1), repmat(sqrtsigi, tn, 1))
     q = q / repmat(np.reshape(np.sum(q, axis=1), (-1, 1)), 1, 7)
-    S = 7 - np.reshape(np.sum(np.less(repmat(temprand, 1, 7),np.cumsum(q, axis=1)), axis=1), (-1, 1)) + 1
+    S = 7 - np.reshape(np.sum(np.less(repmat(temprand, 1, 7), np.cumsum(q, axis=1)), axis=1), (-1, 1)) + 1
 
     # Sample h
     Hh = sps.spdiags(-np.ones(tn-n), -n, tn, tn, format='csc') + sps.eye(tn, format='csc')
@@ -46,9 +46,10 @@ def mvsvrw(y_star: np.ndarray, h: sps.csc_matrix, iSig: sps.csc_matrix, iVh: sps
     invOmega = sps.spdiags(1/np.array([sigi[i-1][0] for i in S]), 0, tn, tn, format='csc')
     Kh = Hh.T @ invSh @ Hh
     Ph = Kh + invOmega
-    Ch = chol(Ph.T).L()
+    Ch = chol(Ph, ordering_method='natural').L().T
     hhat = spsolve(Ph, invOmega @ (y_star - dconst))
     h = sps.csc_matrix(np.reshape(hhat + spsolve(Ch, np.random.randn(tn, 1)), (-1, 1)))
+    h = sps.csc_matrix(np.reshape(hhat + spsolve(Ch, settings.rand_n[0:633]), (-1, 1))) # TESTING
 
 
     return h, S

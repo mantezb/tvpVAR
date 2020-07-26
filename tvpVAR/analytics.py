@@ -5,7 +5,7 @@ from tvpVAR.utils.ir_plots import ir_plots
 
 
 # Load the relevant np.ndarrays from MCMC sampler results file saved in .npz format
-data = np.load('resultsMCMC.npz')
+data = np.load('resultsMCMC_v2.npz')
 s_beta = data['s_beta']
 s_Sig = data['s_Sig']
 cidx = data['cidx']
@@ -46,7 +46,7 @@ plt.show()
 
 # make ir plots
 
-plt.plot( (ir_sort[0, 1, :, bands[[0, 2]]] * scale_adj[0, 1]).T, c='cadetblue', linewidth=2,
+plt.plot((ir_sort[0, 1, :, bands[[0, 2]]] * scale_adj[0, 1]).T, c='cadetblue', linewidth=2,
          linestyle='dashed')
 plt.plot((ir_sort[0, 1, :, bands[[1]]] * scale_adj[0, 1]).T, c='teal', linewidth=3)
 plt.title('Impulse Response of Variable x to y')
@@ -54,7 +54,7 @@ plt.ylabel('Impulse Response')
 plt.xlabel('Time (in quarters)')
 plt.show()
 
-plt.plot( (ir_sort[1, 1, :, bands[[0, 2]]] * scale_adj[0, 1]).T, c='cadetblue', linewidth=2,
+plt.plot((ir_sort[1, 1, :, bands[[0, 2]]] * scale_adj[0, 1]).T, c='cadetblue', linewidth=2,
          linestyle='dashed')
 plt.plot((ir_sort[1, 1, :, bands[[1]]] * scale_adj[0, 1]).T, c='teal', linewidth=3)
 plt.title('Impulse Response of variable y to y')
@@ -62,7 +62,7 @@ plt.ylabel('Impulse Response')
 plt.xlabel('Time (in quarters)')
 plt.show()
 
-plt.plot( (ir_sort[2, 1, :, bands[[0, 2]]] * scale_adj[0, 1]).T, c='cadetblue', linewidth=2,
+plt.plot((ir_sort[2, 1, :, bands[[0, 2]]] * scale_adj[0, 1]).T, c='cadetblue', linewidth=2,
          linestyle='dashed')
 plt.plot((ir_sort[2, 1, :, bands[[1]]] * scale_adj[0, 1]).T, c='teal', linewidth=3)
 plt.title('Impulse Response of variable z to y')
@@ -70,7 +70,7 @@ plt.ylabel('Impulse Response')
 plt.xlabel('Time (in quarters)')
 plt.show()
 
-plt.plot( (ir_sort[0, 1, :, bands[[0, 2]]] * scale_adj[0, 1]).T, c='cadetblue', linewidth=2,
+plt.plot((ir_sort[0, 1, :, bands[[0, 2]]] * scale_adj[0, 1]).T, c='cadetblue', linewidth=2,
          linestyle='dashed')
 plt.plot((ir_sort[1, 1, :, bands[[1]]] * scale_adj[0, 1]).T, c='teal', linewidth=3)
 plt.title('Impulse Response of variable y to y, different confidence bands')

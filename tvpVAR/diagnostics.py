@@ -7,7 +7,7 @@ from tvpVAR.utils.ineff_factor import ineff_factor
 #settings.init()
 
 # Load the relevant np.ndarrays from MCMC sampler results file saved in .npz format
-data = np.load('resultsMCMC.npz')
+data = np.load('resultsMCMC_v2.npz')
 s_beta = data['s_beta']
 cidx = data['cidx']
 bidx = data['bidx']
