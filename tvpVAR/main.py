@@ -1,6 +1,5 @@
 import timeit
 from os import path
-
 import numpy as np
 import numpy.linalg as lin
 import pandas as pd
@@ -14,9 +13,6 @@ from tvpVAR.utils.hpr_sampler import hpr_sampler
 from tvpVAR.utils.mvsvrw import mvsvrw
 from tvpVAR.utils.utils import repmat
 
-#import tvpVAR.utils.settings as settings  # TESTING
-#settings.init() # TESTING
-
 
 # Specification of directories
 base_path = path.dirname(__file__)  # Location of the main.py
@@ -24,8 +20,8 @@ data_path = path.abspath(path.join(base_path, 'data'))  # The path where the dat
 
 """ User Settings """
 # Data specification
-filename = 'ydata.dat'
-output = 'resultsMCMC_Primiceri.npz'
+filename = 'BP2002data_v19.csv'
+output = 'resultsMCMC_diag_lasso_alpha.npz'
 
 # Standardisation controls
 scale_data = 1  # standardise series to have std. dev. of 1
@@ -35,15 +31,16 @@ center_coint = 0 # standardise cointegration terms to have std. dev. of 1, exper
 
 # Algorithm specific controls
 rand_mu = 0  # sample mu randomly (experimental)
-lasso_alpha = 0  # use a lasso prior on the variance of alpha
+lasso_alpha = 1  # use a lasso prior on the variance of alpha
 lasso_Phi = 1  # use a lasso prior on the state covariances
 do_expansion = 0  # use parameter expansion on om, Phi, gamma
 do_ishift = [1, 1]  # do a distn-invariant translation / scaling of draws
-nsims = 50000  # desired number of MCMC simulations
+nsims = 25000  # desired number of MCMC simulations
 burnin = 0.1 * nsims  # burn-in simulations to discard
-p = 2  # number of AR lags
-cointegration_terms = False # True if cointegration terms exist, false if not
-
+p = 3  # number of AR lags
+cointegration_terms = True # True if cointegration terms exist, false if not
+model = 'diag'  # diag, full
+models = ['full', 'diag']
 # Setting to save every "simstep"^th draw; useful for running long chains
 # on windows machines with limited memory
 simstep = 5
@@ -82,7 +79,7 @@ if cointegration_terms:
     dscale_surp = 1 + scale_coint * (np.std(surp, axis=0) - 1)
     dcenter_surp = center_coint * np.mean(surp, axis=0)
     surp = (surp - dcenter_surp) / dscale_surp
-    x_data = np.vstack((np.ones((1, t)), surp.T)) # change this to make surp.T optional (if empty, no exog variables
+    x_data = np.vstack((np.ones((1, t)), surp.T))
 else:
     x_data = np.ones((1, t))
 
@@ -97,10 +94,14 @@ k = n * p + len(x_data)  # Number of coefficients in each equation (endogenous +
 # error covariance matrix
 nk = int(0.5 * n * (n - 1) + n * k)  # size of parameters vector
 
-# Construct x - confirm what is x! - and construct indices cidx and bidx to recover covariance coefficients
+# Construct x - design matrix of all parameters and  indices cidx and bidx to recover covariance coefficients
+# Note parameters are in the following order:
+# 1 + surp1 + surp2 + y1 + y2 + y3 -f1 1 + surp1 + surp2 + y1 + y2 + y3 -f1 -f2  1 + surp1 + surp2 + y1 + y2 etc
 x = x0
 cidx = np.zeros((k, 1))
-for i in range(2):
+fp = int(n * (n-1) / 2) # no of free parameters in B0t using lower triangular decomposition
+
+for i in range(fp-1): # ramge is 2 for 3 free parameters of B0t
     x = np.vstack((x, -y_short[:(i + 1), :], x0))
     cidx = np.array(np.vstack((cidx, np.ones((i + 1, 1)), np.zeros((k, 1)))), dtype=bool)
 bidx = np.array(1 - cidx, dtype=bool)
@@ -135,8 +136,7 @@ s0h = n + 11  # v0 in the paper, df par for transition covariance R~IW(s0h,S0h);
 S0h = 0.01 ** 2 * (s0h - n - 1) * np.eye(n)  # R0 in the paper, scale parameter for transition covariance R~IW(s0h,S0h)
 
 # For the Inverse Gamma (IG) priors, the following corresponds to the marginal prior on
-# Sig_h(i,i) under the Inverse Wishart (used in the diagonal transition cov
-# version):
+# Sig_h(i,i) under the Inverse Wishart (used in the diagonal transition cov version):
 s0hIG = (s0h - n + 1) / 2  # shape parameter for transition variance r_i, r_i ~ IG(s0hIG,S0hIG)
 S0hIG = np.diag(S0h) / 2  # scale parameter for transition variance r_i, r_i ~ IG(s0hIG,S0hIG)
 
@@ -145,8 +145,16 @@ a0 = sps.csc_matrix(np.zeros((nk, 1)))
 A0 = sps.eye(nk, format='csc')
 phi0 = sps.csc_matrix(np.zeros((int(nk * (nk - 1) / 2), 1)))  # not found in the paper - should correspond to phi's
 Phi0 = sps.eye(phi0.shape[0],format='csc').dot(10)  # not found in the paper - should correspond to phi's
-L01 = 0.1
+
+if model == 'full':
+    L01 = 0.1
+elif model == 'diag':
+    L01 = 1
+else:
+    print('Identification for model type', model, 'is not available. Please choose from available models:', models)
+
 L02 = 0.1
+
 lam20 = np.array([L01, L02])  # The same for all Lasso's
 mu0 = np.zeros((nk, 1))  # used for norm cdf for om_st calculation
 M0 = sps.csc_matrix(np.ones((nk, 1)))  # no ref in paper found
@@ -193,182 +201,243 @@ s_om_st = np.zeros((nk, svsims))
 s_om = np.zeros((nk, svsims))
 s_adj = np.zeros((nk, 3, svsims))  # hardcoded 3 - double check!
 
-#rand_om_st = settings.rand_om_st.copy() # TESTING
-#rand_n_39 = settings.rand_n[0:39].copy() # TESTING
-#rand_n_211 = settings.rand_n[0:211].copy() # TESTING
-#rand_n = settings.rand_n.copy() # TESTING
-#rand_tau2 = settings.rand_tau2.copy() # TESTING
-#rand_sigh = settings.rand_sigh.copy() # TESTING
-#rand_om = rand_om_st.copy() # TESTING
-#rand_om[[rand_om_st<=0]] = 0 # TESTING
-
-
 " MCMC Sampler"
 
 # Final initialisations
 print('Sampling', int(burnin + nsims), 'draws from the posterior...')
 start = timeit.default_timer()
 
-for isim in tqdm(range(int(burnin + nsims))):
-    w[widx] = (x * np.tile(om, (1, t))).T.ravel()
-    #w[widx] = (x * np.tile(rand_om, (1, t))).T.ravel() # TESTING
-    wPhi = sps.csc_matrix(w) @ sps.kron(sps.eye(t, format='csc'), Phi.T, format='csc')
+if model == 'full':
+    for isim in tqdm(range(int(burnin + nsims))):
+        w[widx] = (x * np.tile(om, (1, t))).T.ravel()
+        wPhi = sps.csc_matrix(w) @ sps.kron(sps.eye(t, format='csc'), Phi.T, format='csc')
 
-    # Sample alpha | gamma
-    A_hat = sps.csc_matrix(A0 + z.T @ bigSig @ z)
-    #gamma = rand_n.reshape((nk,t), order='F') TESTING
-    a_hat = sps.csc_matrix(spsolve(A_hat, A0 @ a0 + z.T @ bigSig @ (y - wPhi @ gamma.T.reshape((-1, 1)))))
-    alpha = (a_hat + sps.csc_matrix(spsolve(chol(A_hat, ordering_method='natural').L().T, np.random.randn(nk, 1)))).T
-    #alpha = (a_hat + sps.csc_matrix(spsolve(chol(A_hat, ordering_method='natural').L().T, rand_n_39))).T # TESTING
+        # Sample alpha | gamma
+        A_hat = sps.csc_matrix(A0 + z.T @ bigSig @ z)
+        a_hat = sps.csc_matrix(spsolve(A_hat, A0 @ a0 + z.T @ bigSig @ (y - wPhi @ gamma.T.reshape((-1, 1)))))
+        alpha = (a_hat + sps.csc_matrix(spsolve(chol(A_hat, ordering_method='natural').L().T, np.random.randn(nk, 1)))).T
 
-    # Sample gamma | alpha
-    Gam_hat = HH + wPhi.T @ bigSig @ wPhi
-    gam_hat = sps.csc_matrix(np.reshape(spsolve(Gam_hat, wPhi.T @ bigSig @ (y - z @ alpha)), (nk, t), order='F'))
-    gamma = gam_hat + sps.csc_matrix(np.reshape(spsolve(chol(Gam_hat, ordering_method='natural').L().T, np.random.randn(t * nk, 1)), (nk, t),
-                                 order='F'))
-   # gamma = gam_hat + sps.csc_matrix(np.reshape(spsolve(chol(Gam_hat, ordering_method='natural').L().T, rand_n), (nk, t),
-                                              #  order='F')) #TESTING
+        # Sample gamma | alpha
+        Gam_hat = HH + wPhi.T @ bigSig @ wPhi
+        gam_hat = sps.csc_matrix(np.reshape(spsolve(Gam_hat, wPhi.T @ bigSig @ (y - z @ alpha)), (nk, t), order='F'))
+        gamma = gam_hat + sps.csc_matrix(np.reshape(spsolve(chol(Gam_hat, ordering_method='natural').L().T, np.random.randn(t * nk, 1)), (nk, t), order='F'))
 
-    # Do lasso on A0
-    if lasso_alpha:
-        lam2_a = np.random.gamma(lam20[0] + nk, 1 / (lam20[1] + np.sum(1 / np.diag(A0.toarray())) / 2))
-        #lam2_a = 2.17 # TESTING ONLY
-        A0 = sps.spdiags(np.random.wald(np.sqrt(lam2_a) / np.abs(alpha - a0).toarray(), lam2_a).ravel(), 0, nk, nk, format='csc')
+        # Do lasso on A0
+        if lasso_alpha:
+            lam2_a = np.random.gamma(lam20[0] + nk, 1 / (lam20[1] + np.sum(1 / np.diag(A0.toarray())) / 2))
+            A0 = sps.spdiags(np.random.wald(np.sqrt(lam2_a) / np.abs(alpha - a0).toarray(), lam2_a).ravel(), 0, nk, nk, format='csc')
 
-    # Sample Sig_t
-    err = y - sps.hstack((z, wPhi), format='csc') @ sps.vstack((alpha, gamma.T.reshape((-1, 1))))  # error - sparse
-    h, _ = mvsvrw(np.log(err.power(2).data + 0.001).reshape((-1, 1)), h, sps.csc_matrix(lin.inv(Sigh)), sps.eye(n, format='csc'))
-    bigSig = sps.spdiags(np.exp(-h.reshape((-1, 1)).data), 0, t * n, t * n, format='csc')  # inverse of variance
-    shorth = np.reshape(h, (n, t), order='F').tocsc()
-    errh = shorth[:, 1:] - shorth[:, :-1]
-    sseh = errh @ errh.T
-    Sigh = invwishart.rvs(s0h + t - 1, S0h + sseh)  # Correlated volatilities IW(df, scale)
-    #Sigh = rand_sigh # TESTING
-    # Sample om, om_st, tau2, lam2
-    g[gidx] = (sps.csc_matrix(x).multiply((Phi.T @ gamma))).reshape((1, -1))
+        # Sample Sig_t
+        err = y - sps.hstack((z, wPhi), format='csc') @ sps.vstack((alpha, gamma.T.reshape((-1, 1))))  # error - sparse
+        h, _ = mvsvrw(np.log(err.power(2).data + 0.001).reshape((-1, 1)), h, sps.csc_matrix(lin.inv(Sigh)), sps.eye(n, format='csc'))
+        bigSig = sps.spdiags(np.exp(-h.reshape((-1, 1)).data), 0, t * n, t * n, format='csc')  # inverse of variance
+        shorth = np.reshape(h, (n, t), order='F').tocsc()
+        errh = shorth[:, 1:] - shorth[:, :-1]
+        sseh = errh @ errh.T
+        Sigh = invwishart.rvs(s0h + t - 1, S0h + sseh.toarray())  # Correlated volatilities IW(df, scale)
 
-    om, om_st, tau2, lam2 = hpr_sampler(lam20, (y - z @ alpha), g.T, bigSig, om, tau2, mu)  # DISABLE FOR TESTING
-    #om, om_st, tau2, lam2 = hpr_sampler(lam20, (y - z @ alpha), g.T, bigSig, rand_om, rand_tau2, mu)  # TESTING
-    if rand_mu:
-        # Sample mu
-        M_hat = 1 / (M0.toarray() + 1 / tau2)
-        mu_hat = M_hat * (M0.multiply(mu0).toarray() + om_st / tau2)
-        mu = mu_hat + np.sqrt(M_hat) * np.random.randn(nk, 1)
-        lam2_mu = np.random.gamma(lam20[0] + nk, 1 / (lam20[1] + np.sum(1 / M0.toarray()) / 2))
-        M0 = sps.csc_matrix(np.random.wald(np.sqrt(lam2_mu) / np.abs(mu - mu0), lam2_mu))
+        # Sample om, om_st, tau2, lam2
+        g[gidx] = (sps.csc_matrix(x).multiply((Phi.T @ gamma))).reshape((1, -1))
 
-    # Sample Phi
-    # The conditional model is: y = z @ alpha + w @ gamma + w @ f.t @ phi + e
-    bigGam = np.reshape(repmat(gamma, nk, 1), (nk, nk * t), order='F').tocsc()
-    f = f.T
-    f[fidx.T] = bigGam.T[biguidx.T]
-    err = y - sps.hstack((z, w)) @ sps.vstack((alpha, gamma.T.reshape((-1, 1))))
-    wf = w @ f
-    f = f.T
-    Phi_hat = sps.csc_matrix(Phi0 + wf.T @ bigSig @ wf)
-    phi_hat = spsolve(Phi_hat, Phi0 @ phi0 + wf.T @ bigSig @ err)
-    Phi = Phi.T
-    Phi[Phi_idx.T] = phi_hat + spsolve(chol(Phi_hat,ordering_method='natural').L().T, np.random.randn(len(phi_hat), 1))
-    #Phi[Phi_idx.T] = phi_hat + spsolve(chol(Phi_hat, ordering_method='natural').L().T, rand_n[0:741]) # TESTING
-    Phi = Phi.T
-
-    if lasso_Phi:
-        # Do lasso on Phi0
-        lam2_f = np.random.gamma(lam20[0] + phi0.shape[0], 1 / (lam20[1] + np.sum(1 / np.diag(Phi0.toarray())) / 2))  # is it correct to use inverse  of scale?
-        Phi0 = sps.spdiags(np.random.wald(np.sqrt(lam2_f) / np.abs(np.array(Phi.T[Phi_idx.T]).ravel() - phi0.toarray().ravel()),
-                                          lam2_f), 0, phi0.shape[0], phi0.shape[0], format='csc')
-
-
-    if do_expansion:
-        sseg = np.reshape(np.array(np.sum((H_small @ gamma.T).power(2), axis=0)).ravel(), (-1, 1))
-        g0 = np.random.gamma((1 + t) / 2, 2 / (n * t + sseg))
-
-        long_g0 = repmat(np.sqrt(g0), t, 1)
-        Hg0 = sps.spdiags(long_g0.ravel(), 0, t * nk, t * nk, format='csc') + sps.spdiags(-long_g0[:-nk, :].ravel(), -nk, t * nk, t * nk, format='csc')
-        HH = Hg0.T @ Hg0
-
-    if do_ishift[0]:
-        # Apply one distn - invariant scale transformation to lam2 and tau2 (e.g. Liu and Sabatti, 2000)
-        scl2_2 = np.random.gamma(lam20[0] + nk / 2,
-                                 1 / (lam20[1] * lam2 + np.nansum((om_st - mu) ** 2 / tau2) / 2))
-        tau2 = tau2 / scl2_2
+        om, om_st, tau2, lam2 = hpr_sampler(lam20, (y - z @ alpha), g.T, bigSig, om, tau2, mu)
 
         if rand_mu:
-            # one more time for lam2_mu, M0
-            #scale = 1 / (lam20[1] * lam2_mu + np.sum((mu - mu0) ** 2 * M0.toarray()) / 2)
-            #if np.isnan(scale):
-            #    scl2_2m = 1
-            #else:
-            scl2_2m = np.random.gamma(lam20[0] + nk / 2, 1 / (lam20[1] * lam2_mu + np.nansum((mu - mu0) ** 2 * M0.toarray()) / 2))
+            # Sample mu
+            M_hat = 1 / (M0.toarray() + 1 / tau2)
+            mu_hat = M_hat * (M0.multiply(mu0).toarray() + om_st / tau2)
+            mu = mu_hat + np.sqrt(M_hat) * np.random.randn(nk, 1)
+            lam2_mu = np.random.gamma(lam20[0] + nk, 1 / (lam20[1] + np.sum(1 / M0.toarray()) / 2))
+            M0 = sps.csc_matrix(np.random.wald(np.sqrt(lam2_mu) / np.abs(mu - mu0), lam2_mu))
 
-            M0 = M0.multiply(scl2_2m)
-
-        if lasso_alpha:
-            # one more for lam2_a, A0
-            #scale = 1 / (lam20[1] * lam2_a + np.sum((alpha - a0).power(2).toarray().ravel()  * np.diag(A0.toarray())) / 2)
-            #if np.isnan(scale):
-            #    scl2_2a = 1
-            #else:
-            scl2_2a = np.random.gamma(lam20[0] + nk / 2,
-                                      1 / (lam20[1] * lam2_a + np.nansum((alpha - a0).power(2).toarray().ravel() * np.diag(A0.toarray())) / 2))
-
-            A0 = A0.multiply(scl2_2a)
+        # Sample Phi
+        # The conditional model is: y = z @ alpha + w @ gamma + w @ f.t @ phi + e
+        bigGam = np.reshape(repmat(gamma, nk, 1), (nk, nk * t), order='F').tocsc()
+        f = f.T
+        f[fidx.T] = bigGam.T[biguidx.T]
+        err = y - sps.hstack((z, w)) @ sps.vstack((alpha, gamma.T.reshape((-1, 1))))
+        wf = w @ f
+        f = f.T
+        Phi_hat = sps.csc_matrix(Phi0 + wf.T @ bigSig @ wf)
+        phi_hat = spsolve(Phi_hat, Phi0 @ phi0 + wf.T @ bigSig @ err)
+        Phi = Phi.T
+        Phi[Phi_idx.T] = phi_hat + spsolve(chol(Phi_hat,ordering_method='natural').L().T, np.random.randn(len(phi_hat), 1))
+        Phi = Phi.T
 
         if lasso_Phi:
-            # one more for lam2_f, Phi0
-            #scale = 1 / (lam20[1] * lam2_f + np.sum((np.array(Phi.T[Phi_idx.T]).ravel() - phi0.toarray().ravel()) ** 2 * np.diag(Phi0.toarray())) / 2)
-            #if np.isnan(scale):
-            #    scl2_2f = 1
-            #else:
-            scl2_2f = np.random.gamma(lam20[0] + phi0.shape[0] / 2,
-                        1 / (lam20[1] * lam2_f + np.nansum((np.array(Phi.T[Phi_idx.T]).ravel() - phi0.toarray().ravel()) ** 2 * np.diag(Phi0.toarray())) / 2))
+            # Do lasso on Phi0
+            lam2_f = np.random.gamma(lam20[0] + phi0.shape[0], 1 / (lam20[1] + np.sum(1 / np.diag(Phi0.toarray())) / 2))
+            Phi0 = sps.spdiags(np.random.wald(np.sqrt(lam2_f) / np.abs(np.array(Phi.T[Phi_idx.T]).ravel() - phi0.toarray().ravel()),
+                                              lam2_f), 0, phi0.shape[0], phi0.shape[0], format='csc')
 
-            Phi0 = Phi0.multiply(scl2_2f)
+        if do_expansion:
+            sseg = np.reshape(np.array(np.sum((H_small @ gamma.T).power(2), axis=0)).ravel(), (-1, 1))
+            g0 = np.random.gamma((1 + t) / 2, 2 / (n * t + sseg))
 
-    if do_ishift[1]:
-        # apply j distn-invariant location transformations to alpha and gamma (e.g. Liu and Sabatti, 2000)
-        Om = sps.spdiags(om.ravel(), 0, om.shape[0], om.shape[0], format='csc') @ Phi.T
-        #Om = sps.spdiags(rand_om.ravel(), 0, om.shape[0], om.shape[0], format='csc') @ Phi.T # TESTING
-        Loc_hat = sps.eye(nk, format='csc') + Om.T @ A0 @ Om
-        loc_hat = spsolve(Loc_hat, np.reshape(gamma[:, 0], (-1, 1)) - Om.T @ A0 @ (alpha - a0))
-        loc = np.reshape(loc_hat + spsolve(chol(Loc_hat, ordering_method='natural').L().T, np.random.randn(nk, 1)), (-1, 1))
-        #loc = np.reshape(loc_hat + spsolve(chol(Loc_hat, ordering_method='natural').L().T, rand_n_39),
-                        # (-1, 1)) # TESTING
-        alpha = alpha + sps.csc_matrix(om * loc) # DISABLE FOR TESTING
-        #alpha = alpha + sps.csc_matrix(rand_om * loc) # TESTING
-        gamma = gamma - sps.csc_matrix(repmat(loc, 1, t))
+            long_g0 = repmat(np.sqrt(g0), t, 1)
+            Hg0 = sps.spdiags(long_g0.ravel(), 0, t * nk, t * nk, format='csc') + sps.spdiags(-long_g0[:-nk, :].ravel(), -nk, t * nk, t * nk, format='csc')
+            HH = Hg0.T @ Hg0
 
-    # Save draws
-    #if True: # TESTING
-    if (isim + 1 > burnin) and (np.mod(isim + 1 - burnin, simstep) == 0): # DISABLE FOR TESTING
+        if do_ishift[0]:
+            # Apply one distn - invariant scale transformation to lam2 and tau2 (e.g. Liu and Sabatti, 2000)
+            scl2_2 = np.random.gamma(lam20[0] + nk / 2,
+                                     1 / (lam20[1] * lam2 + np.nansum((om_st - mu) ** 2 / tau2) / 2))
+            tau2 = tau2 / scl2_2
 
-        isave = int((isim + 1 - burnin) / simstep - 1)
-       # isave = 0 # TESTING
-        s_alpha[:, isave] = alpha.toarray().ravel()
-        s_gamma[:, :, isave] = (sps.spdiags(np.sqrt(g0.toarray()).ravel(), 0, g0.shape[0], g0.shape[0], format='csc') @ gamma).toarray()
-        s_beta[:, :, isave] = (repmat(alpha, 1, t) + sps.spdiags(om.ravel(), 0, om.shape[0], om.shape[0], format='csc') @ Phi.T @ gamma).toarray()
-        s_Phi[:, :, isave] = (sps.spdiags(np.sqrt(g0.toarray()).ravel(), 0, g0.shape[0], g0.shape[0], format='csc') @ Phi.T @
-                              sps.spdiags(np.sqrt(1 / g0.toarray()).ravel(), 0, g0.shape[0], g0.shape[0], format='csc')).toarray()
-        s_Sig[:, :, isave] = np.exp(shorth.data).reshape((n, t), order='F')  # Sig
-        s_Sigh[:, :, isave] = Sigh
-        s_lam2[:, isave] = lam2
-        s_tau2[:, isave] = tau2.ravel()
-        s_mu[:, isave] = mu.ravel()
-        s_om_st[:, isave] = (om_st * np.sqrt(1 / g0.toarray())).ravel()
-        s_om[:, isave] = (om * np.sqrt(1 / g0.toarray())).ravel()
-        s_adj[:, :, isave] = np.hstack((np.sqrt(scl2_1), np.vstack((np.sqrt(scl2_2), np.zeros((nk - 1, 1)))), loc))
+            if rand_mu:
+                scl2_2m = np.random.gamma(lam20[0] + nk / 2, 1 / (lam20[1] * lam2_mu + np.nansum((mu - mu0) ** 2 * M0.toarray()) / 2))
+                M0 = M0.multiply(scl2_2m)
+
+            if lasso_alpha:
+                scl2_2a = np.random.gamma(lam20[0] + nk / 2,
+                                          1 / (lam20[1] * lam2_a + np.nansum((alpha - a0).power(2).toarray().ravel() * np.diag(A0.toarray())) / 2))
+                A0 = A0.multiply(scl2_2a)
+
+            if lasso_Phi:
+                scl2_2f = np.random.gamma(lam20[0] + phi0.shape[0] / 2,
+                            1 / (lam20[1] * lam2_f + np.nansum((np.array(Phi.T[Phi_idx.T]).ravel() - phi0.toarray().ravel()) ** 2 * np.diag(Phi0.toarray())) / 2))
+                Phi0 = Phi0.multiply(scl2_2f)
+
+        if do_ishift[1]:
+            # apply j distn-invariant location transformations to alpha and gamma (e.g. Liu and Sabatti, 2000)
+            Om = sps.spdiags(om.ravel(), 0, om.shape[0], om.shape[0], format='csc') @ Phi.T
+            Loc_hat = sps.eye(nk, format='csc') + Om.T @ A0 @ Om
+            loc_hat = spsolve(Loc_hat, np.reshape(gamma[:, 0], (-1, 1)) - Om.T @ A0 @ (alpha - a0))
+            loc = np.reshape(loc_hat + spsolve(chol(Loc_hat, ordering_method='natural').L().T, np.random.randn(nk, 1)), (-1, 1))
+            alpha = alpha + sps.csc_matrix(om * loc)
+            gamma = gamma - sps.csc_matrix(repmat(loc, 1, t))
+
+        # Save draws
+        #if True: # TESTING
+        if (isim + 1 > burnin) and (np.mod(isim + 1 - burnin, simstep) == 0):
+            isave = int((isim + 1 - burnin) / simstep - 1)
+            s_alpha[:, isave] = alpha.toarray().ravel()
+            s_gamma[:, :, isave] = (sps.spdiags(np.sqrt(g0.toarray()).ravel(), 0, g0.shape[0], g0.shape[0], format='csc') @ gamma).toarray()
+            s_beta[:, :, isave] = (repmat(alpha, 1, t) + sps.spdiags(om.ravel(), 0, om.shape[0], om.shape[0], format='csc') @ Phi.T @ gamma).toarray()
+            s_Phi[:, :, isave] = (sps.spdiags(np.sqrt(g0.toarray()).ravel(), 0, g0.shape[0], g0.shape[0], format='csc') @ Phi.T @
+                                  sps.spdiags(np.sqrt(1 / g0.toarray()).ravel(), 0, g0.shape[0], g0.shape[0], format='csc')).toarray()
+            s_Sig[:, :, isave] = np.exp(shorth.data).reshape((n, t), order='F')  # Sig
+            s_Sigh[:, :, isave] = Sigh
+            s_lam2[:, isave] = lam2
+            s_tau2[:, isave] = tau2.ravel()
+            s_mu[:, isave] = mu.ravel()
+            s_om_st[:, isave] = (om_st * np.sqrt(1 / g0.toarray())).ravel()
+            s_om[:, isave] = (om * np.sqrt(1 / g0.toarray())).ravel()
+            s_adj[:, :, isave] = np.hstack((np.sqrt(scl2_1), np.vstack((np.sqrt(scl2_2), np.zeros((nk - 1, 1)))), loc))
+
+elif model == 'diag':
+
+    for isim in tqdm(range(int(burnin + nsims))):
+        w[widx] = (x * np.tile(om, (1, t))).T.ravel()
+
+        # Sample alpha | gamma
+        A_hat = sps.csc_matrix(A0 + z.T @ bigSig @ z)
+        a_hat = sps.csc_matrix(spsolve(A_hat, A0 @ a0 + z.T @ bigSig @ (y - w @ gamma.T.reshape((-1, 1)))))
+        alpha = (a_hat + sps.csc_matrix(spsolve(chol(A_hat, ordering_method='natural').L().T, np.random.randn(nk, 1)))).T
+
+        # Sample gamma | alpha
+        Gam_hat = HH + w.T @ bigSig @ w
+        gam_hat = sps.csc_matrix(np.reshape(spsolve(Gam_hat, w.T @ bigSig @ (y - z @ alpha)), (nk, t), order='F'))
+        gamma = gam_hat + sps.csc_matrix(
+            np.reshape(spsolve(chol(Gam_hat, ordering_method='natural').L().T, np.random.randn(t * nk, 1)), (nk, t),
+                       order='F'))
+
+        # Do lasso on A0
+        if lasso_alpha:
+            lam2_a = np.random.gamma(lam20[0] + nk, 1 / (lam20[1] + np.sum(1 / np.diag(A0.toarray())) / 2))
+            A0 = sps.spdiags(np.random.wald(np.sqrt(lam2_a) / np.abs(alpha - a0).toarray(), lam2_a).ravel(), 0, nk, nk,
+                             format='csc')
+
+        # Sample Sig_t
+        err = y - sps.hstack((z, w), format='csc') @ sps.vstack((alpha, gamma.T.reshape((-1, 1))))  # error - sparse
+        h, _ = mvsvrw(np.log(err.power(2).data + 0.001).reshape((-1, 1)), h, sps.csc_matrix(lin.inv(Sigh)),
+                      sps.eye(n, format='csc'))
+        bigSig = sps.spdiags(np.exp(-h.reshape((-1, 1)).data), 0, t * n, t * n, format='csc')  # inverse of variance
+        shorth = np.reshape(h, (n, t), order='F').tocsc()
+        errh = shorth[:, 1:] - shorth[:, :-1]
+        sseh = errh @ errh.T
+        Sigh = np.diag(1 / np.random.gamma(s0hIG + (t - 1)/2, 1 / (S0hIG + np.diag(sseh.toarray()) / 2)))  # Correlated volatilities IW(df, scale)
+
+        # Sample om, om_st, tau2, lam2
+        g[gidx] = (sps.csc_matrix(x).multiply(gamma)).reshape((1, -1))
+
+        om, om_st, tau2, lam2 = hpr_sampler(lam20, (y - z @ alpha), g.T, bigSig, om, tau2, mu)
+
+        if rand_mu:
+            # Sample mu
+            M_hat = 1 / (M0.toarray() + 1 / tau2)
+            mu_hat = M_hat * (M0.multiply(mu0).toarray() + om_st / tau2)
+            mu = mu_hat + np.sqrt(M_hat) * np.random.randn(nk, 1)
+            lam2_mu = np.random.gamma(lam20[0] + nk, 1 / (lam20[1] + np.sum(1 / M0.toarray()) / 2))
+            M0 = sps.csc_matrix(np.random.wald(np.sqrt(lam2_mu) / np.abs(mu - mu0), lam2_mu))
+
+        if do_ishift[0]:
+            # Apply one distn - invariant scale transformation to lam2 and tau2 (e.g. Liu and Sabatti, 2000)
+            scl2_2 = np.random.gamma(lam20[0] + nk / 2,
+                                     1 / (lam20[1] * lam2 + np.nansum((om_st - mu) ** 2 / tau2) / 2))
+            tau2 = tau2 / scl2_2
+
+            if rand_mu:
+                scl2_2m = np.random.gamma(lam20[0] + nk / 2,
+                                          1 / (lam20[1] * lam2_mu + np.nansum((mu - mu0) ** 2 * M0.toarray()) / 2))
+                M0 = M0.multiply(scl2_2m)
+
+            if lasso_alpha:
+
+                scl2_2a = np.random.gamma(lam20[0] + nk / 2,
+                                          1 / (lam20[1] * lam2_a + np.nansum((alpha - a0).power(2).toarray().ravel() * np.diag(A0.toarray())) / 2))
+                A0 = A0.multiply(scl2_2a)
+
+        if do_ishift[1]:
+            # apply j distn-invariant location transformations to alpha and gamma (e.g. Liu and Sabatti, 2000)
+            Om = sps.spdiags(om.ravel(), 0, om.shape[0], om.shape[0], format='csc')
+            Loc_hat = sps.eye(nk, format='csc') + Om.T @ A0 @ Om
+            loc_hat = spsolve(Loc_hat, np.reshape(gamma[:, 0], (-1, 1)) - Om.T @ A0 @ (alpha - a0))
+            loc = np.reshape(loc_hat + spsolve(chol(Loc_hat, ordering_method='natural').L().T, np.random.randn(nk, 1)),
+                             (-1, 1))
+            alpha = alpha + sps.csc_matrix(om * loc)
+            gamma = gamma - sps.csc_matrix(repmat(loc, 1, t))
+
+        # Save draws
+        if (isim + 1 > burnin) and (np.mod(isim + 1 - burnin, simstep) == 0):
+            isave = int((isim + 1 - burnin) / simstep - 1)
+            s_alpha[:, isave] = alpha.toarray().ravel()
+            s_gamma[:, :, isave] = gamma.toarray()
+            s_beta[:, :, isave] = (repmat(alpha, 1, t) + sps.csc_matrix(repmat(om, 1, t)).multiply(gamma)).toarray()
+            s_Sig[:, :, isave] = np.exp(shorth.data).reshape((n, t), order='F')  # Sig
+            s_Sigh[:, :, isave] = Sigh
+            s_lam2[:, isave] = lam2
+            s_tau2[:, isave] = tau2.ravel()
+            s_mu[:, isave] = mu.ravel()
+            s_om_st[:, isave] = om_st.ravel()
+            s_om[:, isave] = om.ravel()
+            s_adj[:, :, isave] = np.hstack((np.sqrt(scl2_1), np.vstack((np.sqrt(scl2_2), np.zeros((nk - 1, 1)))), loc))
+
+else:
+    print('Identification for model type', model, 'is not available. Please choose from available models:', models)
+
 
 stop = timeit.default_timer()
 print('Sampling completed after', stop - start)
 
 """ Saving results """
 
-if cointegration_terms:
-    np.savez(output, s_alpha=s_alpha, s_gamma=s_gamma, s_beta=s_beta, s_Phi=s_Phi, s_Sig=s_Sig,
+if model == 'full':
+    if cointegration_terms:
+        np.savez(output, s_alpha=s_alpha, s_gamma=s_gamma, s_beta=s_beta, s_Phi=s_Phi, s_Sig=s_Sig,
          s_Sigh=s_Sigh, s_lam2=s_lam2, s_tau2=s_tau2, s_mu=s_mu, s_om_st=s_om_st, s_om=s_om, s_adj=s_adj, svsims=svsims,
          cidx=cidx, bidx=bidx, dscale=dscale, dscale_surp=dscale_surp, x=x, nk=nk, t=t, p=p)
-else:
-    np.savez(output, s_alpha=s_alpha, s_gamma=s_gamma, s_beta=s_beta, s_Phi=s_Phi, s_Sig=s_Sig,
+    else:
+        np.savez(output, s_alpha=s_alpha, s_gamma=s_gamma, s_beta=s_beta, s_Phi=s_Phi, s_Sig=s_Sig,
+             s_Sigh=s_Sigh, s_lam2=s_lam2, s_tau2=s_tau2, s_mu=s_mu, s_om_st=s_om_st, s_om=s_om, s_adj=s_adj,
+             svsims=svsims,
+             cidx=cidx, bidx=bidx, dscale=dscale, x=x, nk=nk, t=t, p=p)
+elif model == 'diag':
+    if cointegration_terms:
+         np.savez(output, s_alpha=s_alpha, s_gamma=s_gamma, s_beta=s_beta, s_Sig=s_Sig,
+         s_Sigh=s_Sigh, s_lam2=s_lam2, s_tau2=s_tau2, s_mu=s_mu, s_om_st=s_om_st, s_om=s_om, s_adj=s_adj, svsims=svsims,
+         cidx=cidx, bidx=bidx, dscale=dscale, dscale_surp=dscale_surp, x=x, nk=nk, t=t, p=p)
+    else:
+        np.savez(output, s_alpha=s_alpha, s_gamma=s_gamma, s_beta=s_beta, s_Sig=s_Sig,
              s_Sigh=s_Sigh, s_lam2=s_lam2, s_tau2=s_tau2, s_mu=s_mu, s_om_st=s_om_st, s_om=s_om, s_adj=s_adj,
              svsims=svsims,
              cidx=cidx, bidx=bidx, dscale=dscale, x=x, nk=nk, t=t, p=p)

@@ -89,7 +89,6 @@ def tnr(mu: np.ndarray, sig: np.ndarray, lb: np.ndarray, ub: np.ndarray) -> np.n
     idx_arl = np.asarray(idx_arl).ravel()
     idx_arr = np.asarray(idx_arr).ravel()
 
-
     dbd_l = 2 * np.sqrt(np.exp(1)) / (a + np.sqrt(np.power(a, 2) + 4)) * np.exp((np.power(a, 2) - a * np.sqrt(np.power(a, 2) + 4)) / 4)
     dbd_r = 2 * np.sqrt(np.exp(1)) / (-b + np.sqrt(np.power(b, 2) + 4)) * np.exp((np.power(b, 2) + b * np.sqrt(np.power(b, 2) + 4)) / 4)
    # print(a, b) #TESTING

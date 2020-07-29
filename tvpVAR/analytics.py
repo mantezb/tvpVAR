@@ -5,24 +5,22 @@ from dateutil.relativedelta import relativedelta
 from tvpVAR.utils.ir_vecm_sv import ir_vecm_sv
 from tvpVAR.utils.ir_var_sv import ir_var_sv
 
-#import tvpVAR.utils.settings as settings TESTING
-#settings.init() TESTING
-
 """ User Settings """
-output = 'resultsMCMC_Primiceri.npz'
-model = 'ir_var_sv' #'ir_var_sv' for lower triangular identification as per Primiceri (2005), monetary policy shocks
+output = 'resultsMCMC_diag_lasso_alpha.npz'
+model = 'ir_vecm_sv' #'ir_var_sv' for lower triangular identification as per Primiceri (2005), monetary policy shocks
                      # 'ir_vecm_sv' for identification schene as per Blanchard (2002), fiscal policy shocks
 models = ['ir_vecm_sv', 'ir_var_sv']
 variables = ['inflation', 'unemployment', 'interest rate']
-start_date = 1953.00  # start date of the data
-end_date = 2006.5  # end date of the data
+start_date = 1959.50  # start date of the data
+end_date = 2011.75  # end date of the data
 step = 0.25  # i.e. 0.25 for quarterly data
-ir_dates = [1975.00, 1981.5, 1996.00]
+ir_dates = [2000, 2000, 2000.00]
 ir_dates_names = ['1975:Q1', '1981: Q3', '1996: Q1']
 burnin_sims = 0  # extra burnin to be used
-ir_output = 'ir_v1.npz'
+ir_output = 'ir_diag_lasso_alpha.npz'
 quantiles = [0.16, 0.5, 0.84]
 
+""" Data Load """
 # Load the relevant np.ndarrays from MCMC sampler results file saved in .npz format
 data = np.load(output)
 s_beta = data['s_beta'][:, :, burnin_sims:]
@@ -37,8 +35,15 @@ if model=='ir_vecm_sv':
 p = data['p'].item()
 scale_adj = dscale * (1 / dscale.T)
 
-#s_beta = settings.beta_s # TESTING
-#s_Sig = settings.sig_s # TESTING
+# Dates set up
+d_1 = date(int(ir_dates[0]), 3 + int(12*(ir_dates[0]-int(ir_dates[0]))), 1)
+d_2 = date(int(ir_dates[1]), 3 + int(12*(ir_dates[1]-int(ir_dates[1]))), 1)
+d_3 = date(int(ir_dates[2]), 3 + int(12*(ir_dates[2]-int(ir_dates[2]))), 1)
+date_range_1 = [d_1 + relativedelta(months=int(3*i)) for i in range(21)]
+date_range_2 = [d_2 + relativedelta(months=int(3*i)) for i in range(21)]
+date_range_3 = [d_3 + relativedelta(months=int(3*i)) for i in range(21)]
+date_sig = date(int(start_date), 3 + int(12*(start_date-int(start_date))), 1)
+date_range_sig = [date_sig + relativedelta(months=int(3*i)) for i in range(s_Sig.shape[1])]
 
 """ Time invariant/constant parameter probabilities"""
 # Plot the time invariant/constant param probabilities
@@ -54,10 +59,6 @@ plt.title('Time Invariance Probability by Parameter')
 plt.show()
 
 """ Standard Deviations of Residuals"""
-
-date_sig = date(int(start_date), 3 + int(12*(start_date-int(start_date))), 1)
-date_range_sig = [date_sig + relativedelta(months=int(3*i)) for i in range(s_Sig.shape[1])]
-
 sig = np.quantile(s_Sig, quantiles, axis=2)
 
 for i in range(3):
@@ -72,7 +73,7 @@ for i in range(3):
     fig.tight_layout()
     plt.show()
 
-""" Impulse Responses """
+""" Generation of Impulse Responses """
 # Impulse responses
 per = np.arange(start_date, end_date+step, step)
 ir_dates = np.array(ir_dates)
@@ -93,15 +94,7 @@ else:
     print('Identification for model type', model ,'is not available. Please choose from available models:', models)
 
 
-""" Generate Impulse Response Plots """
-
-d_1 = date(int(ir_dates[0]), 3 + int(12*(ir_dates[0]-int(ir_dates[0]))), 1)
-d_2 = date(int(ir_dates[1]), 3 + int(12*(ir_dates[1]-int(ir_dates[1]))), 1)
-d_3 = date(int(ir_dates[2]), 3 + int(12*(ir_dates[2]-int(ir_dates[2]))), 1)
-date_range_1 = [d_1 + relativedelta(months=int(3*i)) for i in range(21)]
-date_range_2 = [d_2 + relativedelta(months=int(3*i)) for i in range(21)]
-date_range_3 = [d_3 + relativedelta(months=int(3*i)) for i in range(21)]
-
+""" Impulse Response Plots """
 
 if model=='ir_var_sv':
 
@@ -151,38 +144,38 @@ if model == 'ir_vecm_sv':
     ir_sort = np.sort(ir[:, :, :, ~err.astype('bool').ravel()], 3)
     # make ir plots
     conf1 = (ir_sort[0, 1, :, bands[[0, 2]]] * scale_adj[0, 1]).T
-    plt.plot(conf1, c='cadetblue', linewidth=2,
+    plt.plot(date_range_1, conf1, c='cadetblue', linewidth=2,
          linestyle='dashed')
     plt.fill_between(date_range_1, conf1[:, 0], conf1[:, 1], color='cadetblue', alpha=0.2)
-    plt.plot((ir_sort[0, 1, :, bands[[1]]] * scale_adj[0, 1]).T, c='teal', linewidth=3)
+    plt.plot(date_range_1, (ir_sort[0, 1, :, bands[[1]]] * scale_adj[0, 1]).T, c='teal', linewidth=3)
     plt.title('Impulse Response of Variable x to y')
     plt.ylabel('Impulse Response')
     plt.xlabel('Time (in quarters)')
     plt.show()
 
     conf2 = (ir_sort[1, 1, :, bands[[0, 2]]] * scale_adj[1, 1]).T
-    plt.plot(conf2, c='cadetblue', linewidth=2,
+    plt.plot(date_range_1, conf2, c='cadetblue', linewidth=2,
          linestyle='dashed')
     plt.fill_between(date_range_1, conf2[:, 0], conf2[:, 1], color='cadetblue', alpha=0.2)
-    plt.plot((ir_sort[1, 1, :, bands[[1]]] * scale_adj[1, 1]).T, c='teal', linewidth=3)
+    plt.plot(date_range_1, (ir_sort[1, 1, :, bands[[1]]] * scale_adj[1, 1]).T, c='teal', linewidth=3)
     plt.title('Impulse Response of variable y to y')
     plt.ylabel('Impulse Response')
     plt.xlabel('Time (in quarters)')
     plt.show()
 
     conf3 = (ir_sort[2, 1, :, bands[[0, 2]]] * scale_adj[2, 1]).T
-    plt.plot(conf3, c='cadetblue', linewidth=2,
+    plt.plot(date_range_1, conf3, c='cadetblue', linewidth=2,
              linestyle='dashed')
     plt.fill_between(date_range_1, conf3[:, 0], conf3[:, 1], color='cadetblue', alpha=0.2)
-    plt.plot((ir_sort[2, 1, :, bands[[1]]] * scale_adj[2, 1]).T, c='teal', linewidth=3)
+    plt.plot(date_range_1, (ir_sort[2, 1, :, bands[[1]]] * scale_adj[2, 1]).T, c='teal', linewidth=3)
     plt.title('Impulse Response of variable z to y')
     plt.ylabel('Impulse Response')
     plt.xlabel('Time (in quarters)')
     plt.show()
 
-    plt.plot((ir_sort[0, 1, :, bands[[1]]] * scale_adj[0, 1]).T, c='cadetblue', linewidth=2,
+    plt.plot(date_range_1, (ir_sort[0, 1, :, bands[[1]]] * scale_adj[0, 1]).T, c='cadetblue', linewidth=2,
              linestyle='dashed')
-    plt.plot((ir_sort[1, 1, :, bands[[1]]] * scale_adj[1, 1]).T, c='teal', linewidth=3)
+    plt.plot(date_range_1,(ir_sort[1, 1, :, bands[[1]]] * scale_adj[1, 1]).T, c='teal', linewidth=3)
     plt.title('Impulse Response of variable y to y, different confidence bands')
     plt.ylabel('Impulse Response')
     plt.xlabel('Time (in quarters)')

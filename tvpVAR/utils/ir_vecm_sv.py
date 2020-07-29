@@ -25,7 +25,7 @@ def ir_vecm_sv(beta, sigma, cidx, t_start, s, a1, p, d, cum_ir=False, tax_first=
     # Allocate space
     nsims = sigma.shape[2]
     n = sigma.shape[0]
-    k = int((beta.shape[0] - 0.5 * n * (n-1)) / n) # parameters for each VAR equation excluding free parameters of B0t
+    k = int((beta.shape[0] - 0.5 * n * (n-1)) / n)  # parameters for each VAR equation excluding free parameters of B0t
     bidx = np.array(1-cidx, dtype=bool)
 
     # For constructing the contemporaneus coefficients
@@ -42,8 +42,7 @@ def ir_vecm_sv(beta, sigma, cidx, t_start, s, a1, p, d, cum_ir=False, tax_first=
 
     start = timeit.default_timer()
     for i in tqdm(range(nsims)):
-        # Decompose the reduced form cov matrix using identification scheme in BP2002 - to be changed
-        # to follow Primiceri (2005)
+        # Decompose the reduced form cov matrix using identification scheme in BP2002
         psi = -np.vstack((a1[0], 0))
         b0t = b0t.T
         b0t[ltidx.T] = beta[cidx.ravel(), t_start, i]
@@ -60,7 +59,7 @@ def ir_vecm_sv(beta, sigma, cidx, t_start, s, a1, p, d, cum_ir=False, tax_first=
         m = d.shape[0]  # the cointegration dim
         ikap = lin.inv(kap)  # note: this is just 3x3
         normkap = ikap @ np.diag((1 / np.diag(ikap)))  # normalize shocks
-        f = np.eye(n * (p + 1))  # note: VECM induces an extra lag in the VAR, for VAR p+1 to be replaced by p
+        f = np.eye(n * (p + 1))  # note: VECM induces an extra lag in the VAR
         ir[:, :, 0, i] = normkap  # simultaneous response
         for dt in range(s):
             b0t = b0t.T

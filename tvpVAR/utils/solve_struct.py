@@ -43,10 +43,6 @@ def solve_struct(q, psi, case1=True):
         cdelta1, cxi1, _ = ldl(lin.inv(q11 - cgamma1.T @ cgamma1 / s2_3), lower=False)
         cdelta2, cxi2, _ = ldl(lin.inv(q11 - cgamma2.T @ cgamma2 / s2_3), lower=False)
 
-   # else:
-    #    cdelta1, cxi1 = udl(lin.solve(q11 - cgamma1.T @ cgamma1 / s2_3))
-     #   cdelta2, cxi2 = udl(lin.solve(q11 - cgamma2.T @ cgamma2 / s2_3))
-
     w1 = np.vstack((np.hstack((lin.inv(cdelta1), np.zeros((2, 1)))), np.array([0, 0, 1]))) @ \
          np.vstack((np.hstack((np.eye(2), psi)), np.hstack((cgamma1, np.array([[1]])))))
     s1 = np.vstack((np.hstack((cxi1, np.zeros((2, 1)))), np.array([0, 0, s2_3.item()])))

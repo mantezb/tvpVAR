@@ -63,7 +63,7 @@ def get_lag(x):
     return lag
 
 
-def ineff_factor(x: np.ndarray, lag=None) -> Tuple[np.ndarray,np.ndarray]:
+def ineff_factor(x: np.ndarray, lag=None) -> Tuple[np.ndarray, np.ndarray]:
     """
     This function computes the inefficiency factors for a set of MCMC chains.
     If x is a two-dimensional matrix, it is assumed that each row contains

@@ -2,12 +2,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tvpVAR.utils.ineff_factor import ineff_factor
 
-#import tvpVAR.utils.settings as settings
-#settings.init()
-
 """ User Settings """
-output = 'resultsMCMC_Primiceri.npz'
+output = 'resultsMCMC_diag_lasso_alpha.npz'
 burnin_sims = 0  # extra simulations to be burned for the below calculations based on diagnostics
+
+
+""" Data Load """
 
 # Load the relevant np.ndarrays from MCMC sampler results file saved in .npz format
 data = np.load(output)
@@ -28,10 +28,16 @@ mbeta[:, np.count_nonzero(cidx):] = mbeta0[:, bidx.ravel()]
 beta = np.mean(s_beta, axis=1)
 for i in np.arange(0, s_beta.shape[0]):
     plt.plot(beta[i, :])
+    plt.xlabel('No of simulation')
+    plt.ylabel('Beta')
+    plt.title('Simulations of Beta')
 plt.show()
 
 for i in np.arange(0, s_om_st.shape[0]):
     plt.plot(s_om_st[i, :])
+    plt.xlabel('No of simulation')
+    plt.ylabel('Omega Star')
+    plt.title('Simulations of Omega Star')
 plt.show()
 
 # Set which data to be used
