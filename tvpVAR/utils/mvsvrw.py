@@ -13,18 +13,18 @@ def mvsvrw(y_star: np.ndarray, h: sps.csc_matrix, iSig: sps.csc_matrix, iVh: sps
     This function simulates log-volatilities for a multivariate stochastic
     volatility model with independent random-walk transitions.
     :param y_star:
-    :param h:
+    :param h: log-volatility
     :param iSig:
     :param iVh:
-    :return h, S:
+    :return h, S: log-volatility, no of Gaussians used in the mixture
     """
 
     n = iSig.shape[0]
     tn = h.shape[0]
 
-    # Normal mixture
+    # Normal mixture parameters (Gaussian) from Kim et al. (1998)
     pi = np.array([0.0073, 0.10556, 0.00002, 0.04395, 0.34001, 0.24566, 0.2575])
-    mi = (np.array([-10.12999, -3.97281, -8.56686, 2.77786, 0.61942, 1.79518, -1.08819]) - 1.2704) # means already adjusted!!
+    mi = (np.array([-10.12999, -3.97281, -8.56686, 2.77786, 0.61942, 1.79518, -1.08819]) - 1.2704)  # means already adjusted!!
     sigi = np.array([5.79596, 2.61369, 5.17950, 0.16735, 0.64009, 0.34023, 1.26261])
     sqrtsigi = np.sqrt(sigi)
 

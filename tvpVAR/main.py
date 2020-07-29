@@ -13,10 +13,10 @@ from sksparse.cholmod import cholesky as chol
 from tvpVAR.utils.hpr_sampler import hpr_sampler
 from tvpVAR.utils.mvsvrw import mvsvrw
 from tvpVAR.utils.utils import repmat
+
 #import tvpVAR.utils.settings as settings  # TESTING
+#settings.init() # TESTING
 
-
-#settings.init()
 
 # Specification of directories
 base_path = path.dirname(__file__)  # Location of the main.py
@@ -24,11 +24,14 @@ data_path = path.abspath(path.join(base_path, 'data'))  # The path where the dat
 
 """ User Settings """
 # Data specification
-filename = 'BP2002data_v19.csv'
+filename = 'ydata.dat'
+output = 'resultsMCMC_Primiceri.npz'
 
 # Standardisation controls
 scale_data = 1  # standardise series to have std. dev. of 1
 center_data = 1  # standardise series to have mean 0
+scale_coint = 0  # standardise cointegration terms to have std. dev. of 1, experimental
+center_coint = 0 # standardise cointegration terms to have std. dev. of 1, experimental
 
 # Algorithm specific controls
 rand_mu = 0  # sample mu randomly (experimental)
@@ -36,17 +39,23 @@ lasso_alpha = 0  # use a lasso prior on the variance of alpha
 lasso_Phi = 1  # use a lasso prior on the state covariances
 do_expansion = 0  # use parameter expansion on om, Phi, gamma
 do_ishift = [1, 1]  # do a distn-invariant translation / scaling of draws
-nsims = 25000  # desired number of MCMC simulations
+nsims = 50000  # desired number of MCMC simulations
 burnin = 0.1 * nsims  # burn-in simulations to discard
-p = 3  # number of AR lags
+p = 2  # number of AR lags
+cointegration_terms = False # True if cointegration terms exist, false if not
 
 # Setting to save every "simstep"^th draw; useful for running long chains
 # on windows machines with limited memory
 simstep = 5
 svsims = int(np.floor(nsims / simstep))
 
+
 """ Data processing """
-data = pd.read_csv(path.join(data_path, filename), header=None)
+if filename.split('.')[1]=='csv':
+    data = pd.read_csv(path.join(data_path, filename), header=None)
+else:
+    data = pd.read_table(path.join(data_path, filename), sep='\s+', header=None)
+
 y_data = data.to_numpy()[:, :3]
 t, n = y_data.shape
 do_ishift = np.array(do_ishift)
@@ -68,12 +77,15 @@ for j in range(p):
 
 # Co-integration terms (tax - spend, spend - gdp) - potentially to be re-used to include
 # exogenous variables such as oil prices
-surp = data.to_numpy()[p:, -2:]
-dscale_surp = 1 + 0 * scale_data * (np.std(surp, axis=0) - 1)  # experimental, hardcoded 0
-dcenter_surp = 0 * center_data * np.mean(surp, axis=0)  # experimental, hardcoded 0
-surp = (surp - dcenter_surp) / dscale_surp
+if cointegration_terms:
+    surp = data.to_numpy()[p:, -2:]
+    dscale_surp = 1 + scale_coint * (np.std(surp, axis=0) - 1)
+    dcenter_surp = center_coint * np.mean(surp, axis=0)
+    surp = (surp - dcenter_surp) / dscale_surp
+    x_data = np.vstack((np.ones((1, t)), surp.T)) # change this to make surp.T optional (if empty, no exog variables
+else:
+    x_data = np.ones((1, t))
 
-x_data = np.vstack((np.ones((1, t)), surp.T))
 x0 = np.vstack((x_data, x0))
 
 """ Data constructs for posterior computation """
@@ -118,7 +130,7 @@ biguidx = repmat(uidx, 1, t).astype('bool')
 Phi_idx = sps.triu(np.ones((nk, nk))- sps.eye(nk, format='csc'), format='csc').astype('bool')
 
 """ Priors """
-# For the Inverse Wishart (IW) prior set (used here):
+# For the Inverse Wishart (IW) prior set (used fin the fullcov version):
 s0h = n + 11  # v0 in the paper, df par for transition covariance R~IW(s0h,S0h); check what 11 is for
 S0h = 0.01 ** 2 * (s0h - n - 1) * np.eye(n)  # R0 in the paper, scale parameter for transition covariance R~IW(s0h,S0h)
 
@@ -132,17 +144,17 @@ S0hIG = np.diag(S0h) / 2  # scale parameter for transition variance r_i, r_i ~ I
 a0 = sps.csc_matrix(np.zeros((nk, 1)))
 A0 = sps.eye(nk, format='csc')
 phi0 = sps.csc_matrix(np.zeros((int(nk * (nk - 1) / 2), 1)))  # not found in the paper - should correspond to phi's
-Phi0 = sps.eye(phi0.shape[0]).dot(10)  # not found in the paper - should correspond to phi's
+Phi0 = sps.eye(phi0.shape[0],format='csc').dot(10)  # not found in the paper - should correspond to phi's
 L01 = 0.1
 L02 = 0.1
 lam20 = np.array([L01, L02])  # The same for all Lasso's
-mu0 = np.zeros((nk, 1))  # no ref in paper as to which mu this corresponds to (omega)?
+mu0 = np.zeros((nk, 1))  # used for norm cdf for om_st calculation
 M0 = sps.csc_matrix(np.ones((nk, 1)))  # no ref in paper found
 
 # Initialisations for MCMC sampler
 H_small = sps.spdiags(-np.ones((t - 1)), -1, t, t, format='csc') + sps.eye(t, format='csc')
 H = sps.spdiags(-np.ones((t - 1) * nk), -nk, t*nk, t*nk, format='csc') + sps.eye(t*nk, format='csc')
-HH = H.T @ H
+HH = (H.T @ H).tocsc()
 K = sps.block_diag((A0, HH), 'csc')  # no ref in paper found
 g0 = sps.csc_matrix(np.ones((nk, 1)))  # no ref in paper found
 
@@ -152,7 +164,7 @@ h = sps.csc_matrix(repmat(np.log(np.diag(Sig).reshape(np.diag(Sig).shape[0], 1))
 Sigh = S0h / (s0h + n + 1)  # Start with the prior mode for transition covariance, R~IW(s0h,S0h), mode = S0h/(s0h+p+1)
 bigSig = sps.spdiags(np.exp(-h.reshape((-1, 1)).data), 0, t * n, t * n, format='csc')  # why -h?
 tau2 = np.random.exponential(1, (nk, 1))  # why 1 is used?
-mu = np.zeros((nk, 1))  # no ref in paper as to which mu this corresponds to (omega)?
+mu = np.zeros((nk, 1))   # used for norm cdf for om_st calculation
 om_st = np.sqrt(tau2) * np.random.randn(nk, 1)  # Latent variable Omega star, following N(0,tau2)
 om = om_st.copy()
 om[[om_st <= 0]] = 0  # Truncating om_st values to be > 0
@@ -162,7 +174,7 @@ gamma = sps.csc_matrix(np.random.randn(nk, t))  # time varying coefficients
 Phi = sps.eye(nk, format='csc')  # standard normal CDF values used for pi = Phi(-mu/tau)
 scl2_1 = np.ones((nk, 1))  # no ref in paper found
 scl2_2 = 1  # no ref in paper found
-loc = sps.csc_matrix(np.zeros((nk, 1)))  # no ref in paper found
+loc = np.zeros((nk, 1)) # no ref in paper found
 lam2_mu = None
 lam2_a = None
 lam2_f = None
@@ -224,9 +236,9 @@ for isim in tqdm(range(int(burnin + nsims))):
         A0 = sps.spdiags(np.random.wald(np.sqrt(lam2_a) / np.abs(alpha - a0).toarray(), lam2_a).ravel(), 0, nk, nk, format='csc')
 
     # Sample Sig_t
-    err = y - sps.hstack((z, wPhi), format = 'csc') @ sps.vstack((alpha, gamma.T.reshape((-1, 1))))  # error - sparse
+    err = y - sps.hstack((z, wPhi), format='csc') @ sps.vstack((alpha, gamma.T.reshape((-1, 1))))  # error - sparse
     h, _ = mvsvrw(np.log(err.power(2).data + 0.001).reshape((-1, 1)), h, sps.csc_matrix(lin.inv(Sigh)), sps.eye(n, format='csc'))
-    bigSig = sps.spdiags(np.exp(-h.reshape((-1, 1)).data), 0, t * n, t * n, format='csc')
+    bigSig = sps.spdiags(np.exp(-h.reshape((-1, 1)).data), 0, t * n, t * n, format='csc')  # inverse of variance
     shorth = np.reshape(h, (n, t), order='F').tocsc()
     errh = shorth[:, 1:] - shorth[:, :-1]
     sseh = errh @ errh.T
@@ -235,8 +247,8 @@ for isim in tqdm(range(int(burnin + nsims))):
     # Sample om, om_st, tau2, lam2
     g[gidx] = (sps.csc_matrix(x).multiply((Phi.T @ gamma))).reshape((1, -1))
 
-    om, om_st, tau2, lam2 = hpr_sampler(lam20, (y - z @ alpha), g.T, bigSig, om, tau2, mu) # DISABLE FOR TESTING
-    #om, om_st, tau2, lam2 = hpr_sampler(lam20, (y - z @ alpha), g.T, bigSig, rand_om, rand_tau2, mu) # TESTING
+    om, om_st, tau2, lam2 = hpr_sampler(lam20, (y - z @ alpha), g.T, bigSig, om, tau2, mu)  # DISABLE FOR TESTING
+    #om, om_st, tau2, lam2 = hpr_sampler(lam20, (y - z @ alpha), g.T, bigSig, rand_om, rand_tau2, mu)  # TESTING
     if rand_mu:
         # Sample mu
         M_hat = 1 / (M0.toarray() + 1 / tau2)
@@ -262,7 +274,7 @@ for isim in tqdm(range(int(burnin + nsims))):
 
     if lasso_Phi:
         # Do lasso on Phi0
-        lam2_f = np.random.gamma(lam20[0] + phi0.shape[0], 1 / (lam20[1] + np.sum(1 / np.diag(Phi0.toarray())) / 2))
+        lam2_f = np.random.gamma(lam20[0] + phi0.shape[0], 1 / (lam20[1] + np.sum(1 / np.diag(Phi0.toarray())) / 2))  # is it correct to use inverse  of scale?
         Phi0 = sps.spdiags(np.random.wald(np.sqrt(lam2_f) / np.abs(np.array(Phi.T[Phi_idx.T]).ravel() - phi0.toarray().ravel()),
                                           lam2_f), 0, phi0.shape[0], phi0.shape[0], format='csc')
 
@@ -277,45 +289,41 @@ for isim in tqdm(range(int(burnin + nsims))):
 
     if do_ishift[0]:
         # Apply one distn - invariant scale transformation to lam2 and tau2 (e.g. Liu and Sabatti, 2000)
-        scale = 1 / (lam20[1] * lam2 + np.sum((om_st - mu) ** 2 / tau2) / 2)
-        if np.isnan(scale):
-            scl2_2 = 1
-        else:
-            scl2_2 = np.random.gamma(lam20[0] + nk / 2,
-                                 1 / (lam20[1] * lam2 + np.sum((om_st - mu) ** 2 / tau2) / 2))
+        scl2_2 = np.random.gamma(lam20[0] + nk / 2,
+                                 1 / (lam20[1] * lam2 + np.nansum((om_st - mu) ** 2 / tau2) / 2))
         tau2 = tau2 / scl2_2
 
         if rand_mu:
             # one more time for lam2_mu, M0
-            scale = 1 / (lam20[1] * lam2_mu + np.sum((mu - mu0) ** 2 * M0.toarray()) / 2)
-            if np.isnan(scale):
-                scl2_2m = 1
-            else:
-                scl2_2m = np.random.gamma(lam20[0] + nk / 2, 1 / (lam20[1] * lam2_mu + np.sum((mu - mu0) ** 2 * M0.toarray()) / 2))
+            #scale = 1 / (lam20[1] * lam2_mu + np.sum((mu - mu0) ** 2 * M0.toarray()) / 2)
+            #if np.isnan(scale):
+            #    scl2_2m = 1
+            #else:
+            scl2_2m = np.random.gamma(lam20[0] + nk / 2, 1 / (lam20[1] * lam2_mu + np.nansum((mu - mu0) ** 2 * M0.toarray()) / 2))
 
-            M0 = M0.dot(scl2_2m)
+            M0 = M0.multiply(scl2_2m)
 
         if lasso_alpha:
             # one more for lam2_a, A0
-            scale = 1 / (lam20[1] * lam2_a + np.sum((alpha - a0).power(2).toarray().ravel() * np.diag(A0.toarray())) / 2)
-            if np.isnan(scale):
-                scl2_2a = 1
-            else:
-                scl2_2a = np.random.gamma(lam20[0] + nk / 2,
-                                      1 / (lam20[1] * lam2_a + np.sum((alpha - a0).power(2).toarray().ravel() * np.diag(A0.toarray())) / 2))
+            #scale = 1 / (lam20[1] * lam2_a + np.sum((alpha - a0).power(2).toarray().ravel()  * np.diag(A0.toarray())) / 2)
+            #if np.isnan(scale):
+            #    scl2_2a = 1
+            #else:
+            scl2_2a = np.random.gamma(lam20[0] + nk / 2,
+                                      1 / (lam20[1] * lam2_a + np.nansum((alpha - a0).power(2).toarray().ravel() * np.diag(A0.toarray())) / 2))
 
-            A0 = A0.dot(scl2_2a)
+            A0 = A0.multiply(scl2_2a)
 
         if lasso_Phi:
             # one more for lam2_f, Phi0
-            scale = 1 / (lam20[1] * lam2_f + np.sum((np.array(Phi.T[Phi_idx.T]).ravel() - phi0.toarray().ravel()) ** 2 * np.diag(Phi0.toarray())) / 2)
-            if np.isnan(scale):
-                scl2_2f = 1
-            else:
-                scl2_2f = np.random.gamma(lam20[0] + phi0.shape[0] / 2,
-                        1 / (lam20[1] * lam2_f + np.sum((np.array(Phi.T[Phi_idx.T]).ravel() - phi0.toarray().ravel()) ** 2 * np.diag(Phi0.toarray())) / 2))
+            #scale = 1 / (lam20[1] * lam2_f + np.sum((np.array(Phi.T[Phi_idx.T]).ravel() - phi0.toarray().ravel()) ** 2 * np.diag(Phi0.toarray())) / 2)
+            #if np.isnan(scale):
+            #    scl2_2f = 1
+            #else:
+            scl2_2f = np.random.gamma(lam20[0] + phi0.shape[0] / 2,
+                        1 / (lam20[1] * lam2_f + np.nansum((np.array(Phi.T[Phi_idx.T]).ravel() - phi0.toarray().ravel()) ** 2 * np.diag(Phi0.toarray())) / 2))
 
-            Phi0 = Phi0.dot(scl2_2f)
+            Phi0 = Phi0.multiply(scl2_2f)
 
     if do_ishift[1]:
         # apply j distn-invariant location transformations to alpha and gamma (e.g. Liu and Sabatti, 2000)
@@ -341,7 +349,7 @@ for isim in tqdm(range(int(burnin + nsims))):
         s_beta[:, :, isave] = (repmat(alpha, 1, t) + sps.spdiags(om.ravel(), 0, om.shape[0], om.shape[0], format='csc') @ Phi.T @ gamma).toarray()
         s_Phi[:, :, isave] = (sps.spdiags(np.sqrt(g0.toarray()).ravel(), 0, g0.shape[0], g0.shape[0], format='csc') @ Phi.T @
                               sps.spdiags(np.sqrt(1 / g0.toarray()).ravel(), 0, g0.shape[0], g0.shape[0], format='csc')).toarray()
-        s_Sig[:, :, isave] = np.exp(shorth.data).reshape((n, t), order='F') # Sig
+        s_Sig[:, :, isave] = np.exp(shorth.data).reshape((n, t), order='F')  # Sig
         s_Sigh[:, :, isave] = Sigh
         s_lam2[:, isave] = lam2
         s_tau2[:, isave] = tau2.ravel()
@@ -355,8 +363,14 @@ print('Sampling completed after', stop - start)
 
 """ Saving results """
 
-np.savez('resultsMCMC_v2.npz', s_alpha=s_alpha, s_gamma=s_gamma, s_beta=s_beta, s_Phi=s_Phi, s_Sig=s_Sig,
+if cointegration_terms:
+    np.savez(output, s_alpha=s_alpha, s_gamma=s_gamma, s_beta=s_beta, s_Phi=s_Phi, s_Sig=s_Sig,
          s_Sigh=s_Sigh, s_lam2=s_lam2, s_tau2=s_tau2, s_mu=s_mu, s_om_st=s_om_st, s_om=s_om, s_adj=s_adj, svsims=svsims,
          cidx=cidx, bidx=bidx, dscale=dscale, dscale_surp=dscale_surp, x=x, nk=nk, t=t, p=p)
+else:
+    np.savez(output, s_alpha=s_alpha, s_gamma=s_gamma, s_beta=s_beta, s_Phi=s_Phi, s_Sig=s_Sig,
+             s_Sigh=s_Sigh, s_lam2=s_lam2, s_tau2=s_tau2, s_mu=s_mu, s_om_st=s_om_st, s_om=s_om, s_adj=s_adj,
+             svsims=svsims,
+             cidx=cidx, bidx=bidx, dscale=dscale, x=x, nk=nk, t=t, p=p)
 
-# Use  diagnostics.py and analytics.py
+print('Run diagnostics.py and analytics.py using file', output)

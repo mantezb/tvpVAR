@@ -1,13 +1,16 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from tvpVAR.utils.ineff_factor import ineff_factor
+
 #import tvpVAR.utils.settings as settings
-
-
 #settings.init()
 
+""" User Settings """
+output = 'resultsMCMC_Primiceri.npz'
+burnin_sims = 0  # extra simulations to be burned for the below calculations based on diagnostics
+
 # Load the relevant np.ndarrays from MCMC sampler results file saved in .npz format
-data = np.load('resultsMCMC_v2.npz')
+data = np.load(output)
 s_beta = data['s_beta']
 cidx = data['cidx']
 bidx = data['bidx']
@@ -21,9 +24,24 @@ mbeta = np.zeros(mbeta0.shape)
 mbeta[:, :np.count_nonzero(cidx)] = mbeta0[:, cidx.ravel()]
 mbeta[:, np.count_nonzero(cidx):] = mbeta0[:, bidx.ravel()]
 
+# Convergence of betas
+beta = np.mean(s_beta, axis=1)
+for i in np.arange(0, s_beta.shape[0]):
+    plt.plot(beta[i, :])
+plt.show()
+
+for i in np.arange(0, s_om_st.shape[0]):
+    plt.plot(s_om_st[i, :])
+plt.show()
+
+# Set which data to be used
+
+s_om_st = s_om_st[:, burnin_sims:]
+s_beta = s_beta[:, :, burnin_sims:]
+
 # MCM mixing analysis and beta plots
 ef_om_st, _ = ineff_factor(s_om_st)
-ef_beta, _ = ineff_factor(np.reshape(s_beta, (nk * t, svsims), order='F'))
+ef_beta, _ = ineff_factor(np.reshape(s_beta, (nk * t, svsims-burnin_sims), order='F'))
 
 # Plotting
 flierprops = dict(marker='+', markerfacecolor='teal', markersize=7, linestyle='none', markeredgecolor='teal')

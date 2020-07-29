@@ -25,7 +25,7 @@ def ir_vecm_sv(beta, sigma, cidx, t_start, s, a1, p, d, cum_ir=False, tax_first=
     # Allocate space
     nsims = sigma.shape[2]
     n = sigma.shape[0]
-    k = int((beta.shape[0] - 0.5 * n * (n-1)) / n)
+    k = int((beta.shape[0] - 0.5 * n * (n-1)) / n) # parameters for each VAR equation excluding free parameters of B0t
     bidx = np.array(1-cidx, dtype=bool)
 
     # For constructing the contemporaneus coefficients
@@ -68,12 +68,12 @@ def ir_vecm_sv(beta, sigma, cidx, t_start, s, a1, p, d, cum_ir=False, tax_first=
             b0t = b0t.T
             bt = (np.reshape(beta[bidx.ravel(), t_start + dt + 1, i], (k, n), order='F') @ lin.inv(b0t)).T
             ct = np.hstack((bt[:, k - p * n:], np.zeros((n, n))))
-            ct = ct - np.hstack((-(np.eye(n) +bt[:, k - p * n - m:k - p * n ] @ d), bt[:, k - p * n:]))
+            ct = ct - np.hstack((-(np.eye(n) + bt[:, k - p * n - m:k - p * n] @ d), bt[:, k - p * n:]))
             f = np.vstack((ct, np.hstack((np.eye(n * p), np.zeros((n * p, n)))))) @ f
             ir[:, :, 1 + dt, i] = cum_ir * ir[:, :, dt, i] + f[:n, :n] @ normkap
 
     stop = timeit.default_timer()
-    print('Impulse Response simulation completed adter', stop - start)
+    print('Impulse Response simulation completed after', stop - start)
 
     return ab2, c, svars, ir, err
 

@@ -79,8 +79,8 @@ def tnr(mu: np.ndarray, sig: np.ndarray, lb: np.ndarray, ub: np.ndarray) -> np.n
     #a = np.array(-0.18830241).ravel()#np.array(a).ravel()
     #b = np.array(np.inf).ravel() #np.array(b).ravel()
 
-    idx_icdf = np.nonzero((a.item() < utol) & (b.item()  > ltol))
-    idx_ar = np.nonzero((a.item()  >= utol) | (b.item()  <= ltol))
+    idx_icdf = np.nonzero((a.item() < utol) & (b.item() > ltol))
+    idx_ar = np.nonzero((a.item()  >= utol) | (b.item() <= ltol))
     idx_arl = np.nonzero(a[idx_ar] > 0)
     idx_arr = np.nonzero(b[idx_ar] < 0)
 
@@ -89,8 +89,10 @@ def tnr(mu: np.ndarray, sig: np.ndarray, lb: np.ndarray, ub: np.ndarray) -> np.n
     idx_arl = np.asarray(idx_arl).ravel()
     idx_arr = np.asarray(idx_arr).ravel()
 
-    dbd_l = 2 * np.sqrt(np.exp(1)) / (a + np.sqrt(np.power(a, 2) + 4)) * np.exp((np.power(a.item(), 2) - a * np.sqrt(np.power(a, 2) + 4)) / 4)
+
+    dbd_l = 2 * np.sqrt(np.exp(1)) / (a + np.sqrt(np.power(a, 2) + 4)) * np.exp((np.power(a, 2) - a * np.sqrt(np.power(a, 2) + 4)) / 4)
     dbd_r = 2 * np.sqrt(np.exp(1)) / (-b + np.sqrt(np.power(b, 2) + 4)) * np.exp((np.power(b, 2) + b * np.sqrt(np.power(b, 2) + 4)) / 4)
+   # print(a, b) #TESTING
 
     idx_ar1l = np.asarray(np.nonzero((b[idx_ar[idx_arl]] - a[idx_ar[idx_arl]]) > dbd_l[idx_ar[idx_arl]])).ravel()
     idx_ar2l = np.asarray(np.nonzero((b[idx_ar[idx_arl]] - a[idx_ar[idx_arl]]) <= dbd_l[idx_ar[idx_arl]])).ravel()
