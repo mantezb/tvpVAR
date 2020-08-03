@@ -3,9 +3,9 @@ import matplotlib.pyplot as plt
 from tvpVAR.utils.ineff_factor import ineff_factor
 
 """ User Settings """
-output = 'resultsMCMC_diag_lasso_alpha.npz'
+output = 'resultsMCMC_AWM_full_4vars_conv_2lags_25k_1970_COM.npz'
 burnin_sims = 0  # extra simulations to be burned for the below calculations based on diagnostics
-
+vars = 4
 
 """ Data Load """
 
@@ -18,6 +18,20 @@ nk = data['nk'].item()
 t = data['t'].item()
 svsims = data['svsims'].item()
 s_om_st = data['s_om_st']
+p = data['p'].item()
+
+
+# Create a list with the names of the parameters
+parameters = []
+for i in range(int(np.sum(cidx.ravel()))):
+    parameters.append(f'b{i+1}')
+
+for n in range(vars):
+    parameters.append(f'c{n + 1}')
+    for m in range(p):
+        for j in range(vars):
+            parameters.append(f'y{n+1}{j+1}{m+1}') #y equation, variable, lag
+
 
 mbeta0 = np.mean(s_beta, axis=2).T
 mbeta = np.zeros(mbeta0.shape)
@@ -39,6 +53,22 @@ for i in np.arange(0, s_om_st.shape[0]):
     plt.ylabel('Omega Star')
     plt.title('Simulations of Omega Star')
 plt.show()
+
+# Plot posterior mean of parameters
+plt.plot(parameters, np.mean(s_om_st, axis=1))
+plt.xlabel('Parameter')
+plt.ylabel('Omega Star')
+plt.title('Posterior Mean of Omega Star')
+plt.show()
+
+for i in np.arange(0, s_beta.shape[0]):
+    plt.plot(np.mean(s_beta, axis=2)[i,:])
+    plt.xlabel('Time')
+    plt.ylabel('Beta')
+    plt.title('Posterior Mean of Beta')
+plt.show()
+
+
 
 # Set which data to be used
 

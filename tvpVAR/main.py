@@ -20,8 +20,8 @@ data_path = path.abspath(path.join(base_path, 'data'))  # The path where the dat
 
 """ User Settings """
 # Data specification
-filename = 'BP2002data_v19.csv'
-output = 'resultsMCMC_diag_lasso_alpha.npz'
+filename = 'AWM_4vars_conv_1970_COM.csv'
+output = 'resultsMCMC_AWM_full_4vars_conv_2lags_25k_1970.npz'
 
 # Standardisation controls
 scale_data = 1  # standardise series to have std. dev. of 1
@@ -31,29 +31,29 @@ center_coint = 0 # standardise cointegration terms to have std. dev. of 1, exper
 
 # Algorithm specific controls
 rand_mu = 0  # sample mu randomly (experimental)
-lasso_alpha = 1  # use a lasso prior on the variance of alpha
+lasso_alpha = 0  # use a lasso prior on the variance of alpha
 lasso_Phi = 1  # use a lasso prior on the state covariances
 do_expansion = 0  # use parameter expansion on om, Phi, gamma
 do_ishift = [1, 1]  # do a distn-invariant translation / scaling of draws
 nsims = 25000  # desired number of MCMC simulations
 burnin = 0.1 * nsims  # burn-in simulations to discard
-p = 3  # number of AR lags
-cointegration_terms = True # True if cointegration terms exist, false if not
-model = 'diag'  # diag, full
+p = 2  # number of AR lags
+cointegration_terms = False  # True if cointegration terms exist, false if not
+model = 'full'  # diag, full
 models = ['full', 'diag']
 # Setting to save every "simstep"^th draw; useful for running long chains
 # on windows machines with limited memory
 simstep = 5
 svsims = int(np.floor(nsims / simstep))
-
+vars = 4
 
 """ Data processing """
-if filename.split('.')[1]=='csv':
+if filename.split('.')[1] == 'csv':
     data = pd.read_csv(path.join(data_path, filename), header=None)
 else:
     data = pd.read_table(path.join(data_path, filename), sep='\s+', header=None)
 
-y_data = data.to_numpy()[:, :3]
+y_data = data.to_numpy()[:, :int(vars)]
 t, n = y_data.shape
 do_ishift = np.array(do_ishift)
 
@@ -75,11 +75,12 @@ for j in range(p):
 # Co-integration terms (tax - spend, spend - gdp) - potentially to be re-used to include
 # exogenous variables such as oil prices
 if cointegration_terms:
+    surp0 = data.to_numpy()[:, p:]
     surp = data.to_numpy()[p:, -2:]
     dscale_surp = 1 + scale_coint * (np.std(surp, axis=0) - 1)
     dcenter_surp = center_coint * np.mean(surp, axis=0)
     surp = (surp - dcenter_surp) / dscale_surp
-    x_data = np.vstack((np.ones((1, t)), surp.T))
+    x_data = np.vstack((np.ones((1, t)), surp0[p:, p:-2].T, surp.T))
 else:
     x_data = np.ones((1, t))
 
@@ -101,7 +102,7 @@ x = x0
 cidx = np.zeros((k, 1))
 fp = int(n * (n-1) / 2) # no of free parameters in B0t using lower triangular decomposition
 
-for i in range(fp-1): # ramge is 2 for 3 free parameters of B0t
+for i in range(n-1):  # range is 2 for 3 free parameters of B0t
     x = np.vstack((x, -y_short[:(i + 1), :], x0))
     cidx = np.array(np.vstack((cidx, np.ones((i + 1, 1)), np.zeros((k, 1)))), dtype=bool)
 bidx = np.array(1 - cidx, dtype=bool)
@@ -128,7 +129,7 @@ fidx = f.copy() != 0
 uidx = sps.triu(np.ones((nk, nk)), format='csc')
 uidx[:, -1] = 0
 biguidx = repmat(uidx, 1, t).astype('bool')
-Phi_idx = sps.triu(np.ones((nk, nk))- sps.eye(nk, format='csc'), format='csc').astype('bool')
+Phi_idx = sps.triu(np.ones((nk, nk)) - sps.eye(nk, format='csc'), format='csc').astype('bool')
 
 """ Priors """
 # For the Inverse Wishart (IW) prior set (used fin the fullcov version):
@@ -144,12 +145,12 @@ S0hIG = np.diag(S0h) / 2  # scale parameter for transition variance r_i, r_i ~ I
 a0 = sps.csc_matrix(np.zeros((nk, 1)))
 A0 = sps.eye(nk, format='csc')
 phi0 = sps.csc_matrix(np.zeros((int(nk * (nk - 1) / 2), 1)))  # not found in the paper - should correspond to phi's
-Phi0 = sps.eye(phi0.shape[0],format='csc').dot(10)  # not found in the paper - should correspond to phi's
+Phi0 = sps.eye(phi0.shape[0], format='csc').dot(10)  # not found in the paper - should correspond to phi's
 
 if model == 'full':
     L01 = 0.1
 elif model == 'diag':
-    L01 = 1
+    L01 = 1  # in Eisenstat et al. 2016
 else:
     print('Identification for model type', model, 'is not available. Please choose from available models:', models)
 
@@ -425,21 +426,25 @@ if model == 'full':
     if cointegration_terms:
         np.savez(output, s_alpha=s_alpha, s_gamma=s_gamma, s_beta=s_beta, s_Phi=s_Phi, s_Sig=s_Sig,
          s_Sigh=s_Sigh, s_lam2=s_lam2, s_tau2=s_tau2, s_mu=s_mu, s_om_st=s_om_st, s_om=s_om, s_adj=s_adj, svsims=svsims,
-         cidx=cidx, bidx=bidx, dscale=dscale, dscale_surp=dscale_surp, x=x, nk=nk, t=t, p=p)
+         cidx=cidx, bidx=bidx, dscale=dscale, dscale_surp=dscale_surp, x=x, nk=nk, t=t, p=p, vars=vars, model=model,
+                 lasso_alpha=lasso_alpha, lasso_Phi=lasso_Phi, cointegration_terms=cointegration_terms)
     else:
         np.savez(output, s_alpha=s_alpha, s_gamma=s_gamma, s_beta=s_beta, s_Phi=s_Phi, s_Sig=s_Sig,
              s_Sigh=s_Sigh, s_lam2=s_lam2, s_tau2=s_tau2, s_mu=s_mu, s_om_st=s_om_st, s_om=s_om, s_adj=s_adj,
              svsims=svsims,
-             cidx=cidx, bidx=bidx, dscale=dscale, x=x, nk=nk, t=t, p=p)
+             cidx=cidx, bidx=bidx, dscale=dscale, x=x, nk=nk, t=t, p=p, vars=vars, model=model,
+                 lasso_alpha=lasso_alpha, lasso_Phi=lasso_Phi, cointegration_terms=cointegration_terms)
 elif model == 'diag':
     if cointegration_terms:
          np.savez(output, s_alpha=s_alpha, s_gamma=s_gamma, s_beta=s_beta, s_Sig=s_Sig,
          s_Sigh=s_Sigh, s_lam2=s_lam2, s_tau2=s_tau2, s_mu=s_mu, s_om_st=s_om_st, s_om=s_om, s_adj=s_adj, svsims=svsims,
-         cidx=cidx, bidx=bidx, dscale=dscale, dscale_surp=dscale_surp, x=x, nk=nk, t=t, p=p)
+         cidx=cidx, bidx=bidx, dscale=dscale, dscale_surp=dscale_surp, x=x, nk=nk, t=t, p=p, vars=vars,model=model,
+                 lasso_alpha=lasso_alpha, lasso_Phi=lasso_Phi, cointegration_terms=cointegration_terms)
     else:
         np.savez(output, s_alpha=s_alpha, s_gamma=s_gamma, s_beta=s_beta, s_Sig=s_Sig,
              s_Sigh=s_Sigh, s_lam2=s_lam2, s_tau2=s_tau2, s_mu=s_mu, s_om_st=s_om_st, s_om=s_om, s_adj=s_adj,
              svsims=svsims,
-             cidx=cidx, bidx=bidx, dscale=dscale, x=x, nk=nk, t=t, p=p)
+             cidx=cidx, bidx=bidx, dscale=dscale, x=x, nk=nk, t=t, p=p, vars=vars, model=model,
+                 lasso_alpha=lasso_alpha, lasso_Phi=lasso_Phi, cointegration_terms=cointegration_terms)
 
-print('Run diagnostics.py and analytics.py using file', output)
+print('Run diagnostics.py and analytics.py using file ', output)

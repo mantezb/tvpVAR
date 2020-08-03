@@ -61,8 +61,7 @@ def hpr_sampler(lam20: np.ndarray, y: np.ndarray, g: np.ndarray, bigSig: np.ndar
         ln_xi3 = ((muj_hat**2) / tau2j_hat - (mu[j]**2) / tau2[j]) / 2
         pi_j = 1 / (1 + np.exp(ln_xi0 + ln_xi1 - ln_xi2 + ln_xi3))  # probability of time invariance (i.e. om_st < 0)
 
-        # if pi_j.item() > 0.5: # TESTING
-        if pi_j.item() > np.random.rand(1): # Random Bernoulli draw with probability of time invariance equal to pi_j
+        if pi_j.item() > np.random.rand(1):  # Random Bernoulli draw with probability of time invariance equal to pi_j
             om_st[j, 0] = tnr(mu[j], np.sqrt(tau2[j]), np.NINF, 0)
         else:
             om_st[j, 0] = tnr(muj_hat, np.sqrt(tau2j_hat), 0, np.inf)
