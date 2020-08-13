@@ -3,9 +3,12 @@ import matplotlib.pyplot as plt
 from tvpVAR.utils.ineff_factor import ineff_factor
 
 """ User Settings """
-output = 'resultsMCMC_AWM_full_4vars_conv_2lags_25k_1970_COM.npz'
+output = 'resultsMCMC_AWM_full_5vars_conv_2lags_25k_1980.npz'
 burnin_sims = 0  # extra simulations to be burned for the below calculations based on diagnostics
-vars = 4
+vars = 5
+save_plots = True  # save plots as pdf
+show_plots = True  # show plots
+ineff_output = "ineff_full_5vars_conv_2lags_25k_1980.npz"
 
 """ Data Load """
 
@@ -45,28 +48,40 @@ for i in np.arange(0, s_beta.shape[0]):
     plt.xlabel('No of simulation')
     plt.ylabel('Beta')
     plt.title('Simulations of Beta')
-plt.show()
+if save_plots:
+    plt.savefig('Beta_sims.pdf', format='pdf')
+if show_plots:
+    plt.show()
 
 for i in np.arange(0, s_om_st.shape[0]):
     plt.plot(s_om_st[i, :])
     plt.xlabel('No of simulation')
     plt.ylabel('Omega Star')
     plt.title('Simulations of Omega Star')
-plt.show()
+if save_plots:
+    plt.savefig('Om_st_sims.pdf', format='pdf')
+if show_plots:
+    plt.show()
 
 # Plot posterior mean of parameters
 plt.plot(parameters, np.mean(s_om_st, axis=1))
 plt.xlabel('Parameter')
 plt.ylabel('Omega Star')
 plt.title('Posterior Mean of Omega Star')
-plt.show()
+if save_plots:
+    plt.savefig('Om_st_posterior_mean.pdf', format='pdf')
+if show_plots:
+    plt.show()
 
 for i in np.arange(0, s_beta.shape[0]):
     plt.plot(np.mean(s_beta, axis=2)[i,:])
     plt.xlabel('Time')
     plt.ylabel('Beta')
     plt.title('Posterior Mean of Beta')
-plt.show()
+if save_plots:
+    plt.savefig('Beta_posterior_mean.pdf', format='pdf')
+if show_plots:
+    plt.show()
 
 
 
@@ -78,6 +93,7 @@ s_beta = s_beta[:, :, burnin_sims:]
 # MCM mixing analysis and beta plots
 ef_om_st, _ = ineff_factor(s_om_st)
 ef_beta, _ = ineff_factor(np.reshape(s_beta, (nk * t, svsims-burnin_sims), order='F'))
+np.savez(ineff_output, ef_om_st=ef_om_st, ef_beta=ef_beta)
 
 # Plotting
 flierprops = dict(marker='+', markerfacecolor='teal', markersize=7, linestyle='none', markeredgecolor='teal')
@@ -87,11 +103,17 @@ plt.boxplot([ef_om_st[:, 0], ef_beta[:, 0]], labels=['Omega Star', 'Beta'], flie
 plt.xlabel('Estimated Parameters')
 plt.ylabel('Inefficiency Factors')
 plt.title(' Boxplot of Inefficiency Factors')
-plt.show()
+if save_plots:
+    plt.savefig('Ineff_factors.pdf', format='pdf')
+if show_plots:
+    plt.show()
 # A boxplot of Omega_star and Bet inefficiency factors
 plt.plot(np.max(mbeta, axis=0) - np.min(mbeta, axis=0), marker='x', c='teal', linestyle='dashed', linewidth=1)
 plt.ylabel('Max Beta - Min Beta')
 plt.xlabel('Parameter Index')
 plt.title('Maximum vs Minimum Average Beta Parameters')
-plt.show()
+if save_plots:
+    plt.savefig('MTV_beta.pdf', format='pdf')
+if show_plots:
+    plt.show()
 

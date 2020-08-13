@@ -6,23 +6,26 @@ from tvpVAR.utils.ir_vecm_sv import ir_vecm_sv
 from tvpVAR.utils.ir_var_sv import ir_var_sv
 
 """ User Settings """
-output = 'resultsMCMC_AWM_full_4vars_conv_2lags_25k_1970_v2.npz'
+output = 'resultsMCMC_AWM_full_5vars_conv_2lags_25k_1980.npz'
 model = 'ir_var_sv' #'ir_var_sv' for lower triangular identification as per Primiceri (2005), monetary policy shocks
                      # 'ir_vecm_sv' for identification schene as per Blanchard (2002), fiscal policy shocks
 models = ['ir_vecm_sv', 'ir_var_sv']
-variables = ['Real output', 'Prices', 'Interest rate', 'Exchange Rate']
-#variables = ['Commodity prices', 'Real output', 'Prices', 'Interest rate']
+variables = ['Commodity prices', 'Real output', 'Prices', 'Interest rate', 'Exchange Rate']
+#variables = ['Real output', 'Prices', 'Interest rate', 'Exchange Rate']
 policy_equation = ['Interest rate']
-start_date = 1970.25  # start date of the data
+start_date = 1980.00  # start date of the data
 end_date = 2017.75  # end date of the data
 step = 0.25  # i.e. 0.25 for quarterly data
 ir_dates = [1980.00, 1990.00, 1995.00, 2000.00, 2005.00, 2010.00]  #.00 corresponds to Q1, .25 Q2, 0.5 Q3 and 0.74 Q4
 burnin_sims = 0  # extra burnin to be used
-ir_output = 'ir_AWM_diag_2lag_conv_4var_25k_1970_v2.npz'
+ir_output = 'ir_AWM_full_5vars_conv_2lags_25k_1980.npz'
 quantiles = [0.16, 0.5, 0.84]
-horizon_sim = 12
-horizon_plot = 12
-write_ir = True # write impulse response results in "ir output" file
+horizon_sim = 20  # simulation horizon for impulse responses
+horizon_plot = 12    # plotting horizon for impulse responses
+write_ir = True  # write impulse response results in "ir output" file
+save_plots = True  # save plots as pdf
+show_plots = True  # show plots
+ax_adj = False  # adjust axis for plots
 
 """ Data Load """
 # Load the relevant np.ndarrays from MCMC sampler results file saved in .npz format
@@ -38,8 +41,7 @@ if model=='ir_vecm_sv':
     dscale_surp = data['dscale_surp'].reshape((-1, 1))
 p = data['p'].item()
 scale_adj = dscale * (1 / dscale.T)
-save_plots = True
-show_plots = False
+
 # Dates set up
 date_dict = {0: 'Q1', 0.25: 'Q2', 0.5: 'Q3', 0.75: 'Q4'}
 ir_dates_names = [f'{int(ir_dates[0])}-{date_dict[np.mod(ir_dates[0],1)]}', f'{int(ir_dates[1])}-{date_dict[np.mod(ir_dates[1],1)]}',
@@ -84,7 +86,7 @@ plt.ylabel('TIV probability')
 plt.xlabel('Parameter Index')
 plt.title('Time Invariance Probability by Parameter')
 if save_plots:
-    plt.savefig('TIV_SMSS',format='pdf')
+    plt.savefig('TIV_SMSS.pdf', format='pdf')
 if show_plots:
     plt.show()
 
@@ -102,7 +104,7 @@ for i in range(len(variables)):
     ax.legend(loc='upper left')
     fig.tight_layout()
     if save_plots:
-        plt.savefig(f'Resid_{variables[i]}_SMSS',format='pdf')
+        plt.savefig(f'Resid_{variables[i]}_SMSS.pdf', format='pdf')
     if show_plots:
         plt.show()
 
@@ -151,7 +153,8 @@ if model == 'ir_var_sv':
         ax.set_title(f'Impulse response of {variables[0]}, {ir_dates_names[i]}')
         ax.set_xlabel('Time')
         ax.legend(loc='upper left')
-        ax.set_ylim(bottom=-0.015, top=0.06)
+        if ax_adj:
+            ax.set_ylim(bottom=-0.015, top=0.06)
         fig.tight_layout()
         if save_plots:
             plt.savefig(f'{variables[0]}_{ir_dates_names[i]}_SMSS.pdf', format='pdf')
@@ -166,7 +169,8 @@ if model == 'ir_var_sv':
         ax.set_title(f'Impulse response of {variables[1]}, {ir_dates_names[i]}')
         ax.set_xlabel('Time')
         ax.legend(loc='upper left')
-        ax.set_ylim(bottom=-0.002, top=0.01)
+        if ax_adj:
+            ax.set_ylim(bottom=-0.002, top=0.01)
         fig.tight_layout()
         if save_plots:
             plt.savefig(f'{variables[1]}_{ir_dates_names[i]}_SMSS.pdf', format='pdf')
@@ -181,14 +185,14 @@ if model == 'ir_var_sv':
         ax.set_title(f'Impulse response of {variables[2]}, {ir_dates_names[i]}')
         ax.set_xlabel('Time')
         ax.legend(loc='upper left')
-        ax.set_ylim(bottom=-0.5, top=3.5)
+       # ax.set_ylim(bottom=-0.5, top=3.5)
         fig.tight_layout()
         if save_plots:
             plt.savefig(f'{variables[2]}_{ir_dates_names[i]}_SMSS.pdf', format='pdf')
         if show_plots:
             plt.show()
 
-        if len(variables)==4:
+        if len(variables) >= 4:
             fig, ax = plt.subplots(figsize=(10, 6))
             ax.plot(date_list[i], (ir_list[i][1, 3, :] * scale_adj[3, pol_eq]).T, c='teal', label='Mean IR')
             ax.fill_between(date_list[i], (ir_list[i][0, 3, :] * scale_adj[3, pol_eq]).T, (ir_list[i][2, 3, :] * scale_adj[3, pol_eq]).T,
@@ -197,11 +201,30 @@ if model == 'ir_var_sv':
             ax.set_title(f'Impulse response of {variables[3]}, {ir_dates_names[i]}')
             ax.set_xlabel('Time')
             ax.legend(loc='upper left')
-            ax.set_ylim(bottom=-0.1, top=0.2)
+            if ax_adj:
+                ax.set_ylim(bottom=-0.1, top=0.2)
             fig.tight_layout()
             plt.savefig(f'{variables[3]}_{ir_dates_names[i]}_SMSS.pdf', format='pdf')
             if save_plots:
                 plt.savefig(f'{variables[3]}_{ir_dates_names[i]}_SMSS.pdf', format='pdf')
+            if show_plots:
+                plt.show()
+
+        if len(variables) >= 5:
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.plot(date_list[i], (ir_list[i][1, 4, :] * scale_adj[4, pol_eq]).T, c='teal', label='Mean IR')
+            ax.fill_between(date_list[i], (ir_list[i][0, 4, :] * scale_adj[4, pol_eq]).T, (ir_list[i][2, 4, :] * scale_adj[4, pol_eq]).T,
+                            color='cadetblue', alpha=0.1, label='HPD interval')
+            ax.grid(alpha=0.1)
+            ax.set_title(f'Impulse response of {variables[4]}, {ir_dates_names[i]}')
+            ax.set_xlabel('Time')
+            ax.legend(loc='upper left')
+            if ax_adj:
+                ax.set_ylim(bottom=-0.1, top=0.2)
+            fig.tight_layout()
+            plt.savefig(f'{variables[4]}_{ir_dates_names[i]}_SMSS.pdf', format='pdf')
+            if save_plots:
+                plt.savefig(f'{variables[4]}_{ir_dates_names[i]}_SMSS.pdf', format='pdf')
             if show_plots:
                 plt.show()
 

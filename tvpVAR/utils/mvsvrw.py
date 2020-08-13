@@ -11,10 +11,10 @@ def mvsvrw(y_star: np.ndarray, h: sps.csc_matrix, iSig: sps.csc_matrix, iVh: sps
     """
     This function simulates log-volatilities for a multivariate stochastic
     volatility model with independent random-walk transitions.
-    :param y_star:
+    :param y_star: observed errors (residuals)
     :param h: log-volatility
-    :param iSig:
-    :param iVh:
+    :param iSig: variance of error in the measurement equation
+    :param iVh: variance of h_t
     :return h, S: log-volatility, no of Gaussians used in the mixture
     """
 

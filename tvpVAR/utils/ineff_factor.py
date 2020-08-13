@@ -71,7 +71,7 @@ def ineff_factor(x: np.ndarray, lag=None) -> Tuple[np.ndarray, np.ndarray]:
     be made to caculate it based on an auto-correlation "tappering-off"
     rule-of-thumb. In this case, it will also be returned as an additional
     output variable.
-    :param x: a matrix where each row contains a seperate chain
+    :param x: a matrix where each row contains a separate chain
     :param l: lag cut-off
     :return:
     """

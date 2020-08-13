@@ -13,15 +13,14 @@ from tvpVAR.utils.hpr_sampler import hpr_sampler
 from tvpVAR.utils.mvsvrw import mvsvrw
 from tvpVAR.utils.utils import repmat
 
-
 # Specification of directories
 base_path = path.dirname(__file__)  # Location of the main.py
 data_path = path.abspath(path.join(base_path, 'data'))  # The path where the data is stored
 
 """ User Settings """
 # Data specification
-filename = 'AWM_4vars_conv_1970_COM.csv'
-output = 'resultsMCMC_AWM_full_4vars_conv_2lags_25k_1970.npz'
+filename = 'AWM_5vars_conv_1970.csv'
+output = 'resultsMCMC_AWM_full_5vars_conv_2lags_25k_1970_reord.npz'
 
 # Standardisation controls
 scale_data = 1  # standardise series to have std. dev. of 1
@@ -45,7 +44,7 @@ models = ['full', 'diag']
 # on windows machines with limited memory
 simstep = 5
 svsims = int(np.floor(nsims / simstep))
-vars = 4
+vars = 5
 
 """ Data processing """
 if filename.split('.')[1] == 'csv':
