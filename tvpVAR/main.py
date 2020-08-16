@@ -20,7 +20,7 @@ data_path = path.abspath(path.join(base_path, 'data'))  # The path where the dat
 """ User Settings """
 # Data specification
 filename = 'AWM_5vars_conv_1970.csv'
-output = 'resultsMCMC_AWM_full_5vars_conv_2lags_25k_1970_reord.npz'
+output = 'resultsMCMC_AWM_full_5vars_conv_2lags_25k_1970_50k.npz'
 
 # Standardisation controls
 scale_data = 1  # standardise series to have std. dev. of 1
@@ -34,7 +34,7 @@ lasso_alpha = 0  # use a lasso prior on the variance of alpha
 lasso_Phi = 1  # use a lasso prior on the state covariances
 do_expansion = 0  # use parameter expansion on om, Phi, gamma
 do_ishift = [1, 1]  # do a distn-invariant translation / scaling of draws
-nsims = 25000  # desired number of MCMC simulations
+nsims = 50000  # desired number of MCMC simulations
 burnin = 0.1 * nsims  # burn-in simulations to discard
 p = 2  # number of AR lags
 cointegration_terms = False  # True if cointegration terms exist, false if not

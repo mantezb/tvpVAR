@@ -6,25 +6,25 @@ from tvpVAR.utils.ir_vecm_sv import ir_vecm_sv
 from tvpVAR.utils.ir_var_sv import ir_var_sv
 
 """ User Settings """
-output = 'resultsMCMC_AWM_full_5vars_conv_2lags_25k_1980.npz'
+output = 'resultsMCMC_AWM_full_4vars_conv_2lags_25k_1980_v2.npz'
 model = 'ir_var_sv' #'ir_var_sv' for lower triangular identification as per Primiceri (2005), monetary policy shocks
                      # 'ir_vecm_sv' for identification schene as per Blanchard (2002), fiscal policy shocks
 models = ['ir_vecm_sv', 'ir_var_sv']
-variables = ['Commodity prices', 'Real output', 'Prices', 'Interest rate', 'Exchange Rate']
-#variables = ['Real output', 'Prices', 'Interest rate', 'Exchange Rate']
+#variables = ['Commodity prices','Real output','Prices','Interest rate', 'Exchange Rate']
+variables = ['Real output', 'Prices', 'Interest rate', 'Exchange Rate']
 policy_equation = ['Interest rate']
 start_date = 1980.00  # start date of the data
 end_date = 2017.75  # end date of the data
 step = 0.25  # i.e. 0.25 for quarterly data
-ir_dates = [1980.00, 1990.00, 1995.00, 2000.00, 2005.00, 2010.00]  #.00 corresponds to Q1, .25 Q2, 0.5 Q3 and 0.74 Q4
+ir_dates = [1980.00, 1990.00, 1996.00, 1999.00, 2009.00, 2015.00]  #.00 corresponds to Q1, .25 Q2, 0.5 Q3 and 0.74 Q4
 burnin_sims = 0  # extra burnin to be used
-ir_output = 'ir_AWM_full_5vars_conv_2lags_25k_1980.npz'
+ir_output = 'ir_AWM_full_4vars_conv_2lags_25k_1980_v2.npz'
 quantiles = [0.16, 0.5, 0.84]
 horizon_sim = 20  # simulation horizon for impulse responses
 horizon_plot = 12    # plotting horizon for impulse responses
 write_ir = True  # write impulse response results in "ir output" file
-save_plots = True  # save plots as pdf
-show_plots = True  # show plots
+save_plots = False  # save plots as pdf
+show_plots = False  # show plots
 ax_adj = False  # adjust axis for plots
 
 """ Data Load """
@@ -125,7 +125,7 @@ if model == 'ir_vecm_sv':
 elif model == 'ir_var_sv':
     ir1, ir2, ir3, ir4, ir5, ir6 = ir_var_sv(s_beta, s_Sig, cidx, t_start, horizon_sim, p, pol_eq)
     if write_ir:
-        np.savez(ir_output, ir1=ir1, ir2=ir2, ir3=ir3, ir4=ir4, ir5=ir5, ir6=ir6)
+        np.savez(ir_output, ir1=ir1, ir2=ir2, ir3=ir3, ir4=ir4, ir5=ir5, ir6=ir6,scale_adj=scale_adj)
 else:
     print('Identification for model type ', model,' is not available. Please choose from available models:', models)
 
@@ -185,7 +185,8 @@ if model == 'ir_var_sv':
         ax.set_title(f'Impulse response of {variables[2]}, {ir_dates_names[i]}')
         ax.set_xlabel('Time')
         ax.legend(loc='upper left')
-       # ax.set_ylim(bottom=-0.5, top=3.5)
+        if ax_adj:
+            ax.set_ylim(bottom=-0.5, top=3.5)
         fig.tight_layout()
         if save_plots:
             plt.savefig(f'{variables[2]}_{ir_dates_names[i]}_SMSS.pdf', format='pdf')
@@ -204,7 +205,6 @@ if model == 'ir_var_sv':
             if ax_adj:
                 ax.set_ylim(bottom=-0.1, top=0.2)
             fig.tight_layout()
-            plt.savefig(f'{variables[3]}_{ir_dates_names[i]}_SMSS.pdf', format='pdf')
             if save_plots:
                 plt.savefig(f'{variables[3]}_{ir_dates_names[i]}_SMSS.pdf', format='pdf')
             if show_plots:
@@ -222,7 +222,6 @@ if model == 'ir_var_sv':
             if ax_adj:
                 ax.set_ylim(bottom=-0.1, top=0.2)
             fig.tight_layout()
-            plt.savefig(f'{variables[4]}_{ir_dates_names[i]}_SMSS.pdf', format='pdf')
             if save_plots:
                 plt.savefig(f'{variables[4]}_{ir_dates_names[i]}_SMSS.pdf', format='pdf')
             if show_plots:

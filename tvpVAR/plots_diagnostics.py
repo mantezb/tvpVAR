@@ -8,12 +8,13 @@ burnin_sims = 0  # extra simulations to be burned for the below calculations bas
 vars = 5
 save_plots = True  # save plots as pdf
 show_plots = True  # show plots
-ineff_output = "ineff_full_5vars_conv_2lags_25k_1970_v4.npz"
+ineff_file = "ineff_full_5vars_conv_2lags_25k_1970_v4.npz"
 
 """ Data Load """
 
 # Load the relevant np.ndarrays from MCMC sampler results file saved in .npz format
 data = np.load(output)
+data_ineff =np.load(ineff_file)
 s_beta = data['s_beta']
 cidx = data['cidx']
 bidx = data['bidx']
@@ -22,7 +23,7 @@ t = data['t'].item()
 svsims = data['svsims'].item()
 s_om_st = data['s_om_st']
 p = data['p'].item()
-
+s_om = data['s_om']
 
 # Create a list with the names of the parameters
 parameters = []
@@ -83,17 +84,9 @@ if save_plots:
 if show_plots:
     plt.show()
 
-
-
-# Set which data to be used
-
-s_om_st = s_om_st[:, burnin_sims:]
-s_beta = s_beta[:, :, burnin_sims:]
-
 # MCM mixing analysis and beta plots
-ef_om_st, _ = ineff_factor(s_om_st)
-ef_beta, _ = ineff_factor(np.reshape(s_beta, (nk * t, svsims-burnin_sims), order='F'))
-np.savez(ineff_output, ef_om_st=ef_om_st, ef_beta=ef_beta)
+ef_om_st = data_ineff['ef_om_st']
+ef_beta = data_ineff['ef_beta']
 
 # Plotting
 flierprops = dict(marker='+', markerfacecolor='teal', markersize=7, linestyle='none', markeredgecolor='teal')
@@ -117,3 +110,18 @@ if save_plots:
 if show_plots:
     plt.show()
 
+""" Time invariant/constant parameter probabilities"""
+# Plot the time invariant/constant param probabilities
+p_tiv0 = np.sum(s_om == 0, axis=1)/svsims
+p_tiv = np.zeros(p_tiv0.shape)
+p_tiv[:np.count_nonzero(cidx)] = p_tiv0[cidx.ravel()]
+p_tiv[np.count_nonzero(cidx):] = p_tiv0[bidx.ravel()]
+# Plotting
+plt.plot(parameters, p_tiv, marker='x', c='teal', linestyle='dashed', linewidth=1)
+plt.ylabel('TIV probability')
+plt.xlabel('Parameter Index')
+plt.title('Time Invariance Probability by Parameter')
+if save_plots:
+    plt.savefig('TIV_SMSS.pdf', format='pdf')
+if show_plots:
+    plt.show()
