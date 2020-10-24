@@ -2,6 +2,10 @@
 
 MSc project based on methodology proposed by Eisenstat et al.(2016), applied to TVP-VAR-SV model for monetary policy transmission mechanism analysis.
 
+[slides](http://wwwf.imperial.ac.uk/~nkantas/mcmc_intro.pdf)
+
+[dissertation](http://wwwf.imperial.ac.uk/~nkantas/mcmc_intro.pdf) 
+
 Code:
 
 * main.py - the main script to transform the data and run MCMC simulation
