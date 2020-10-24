@@ -2,9 +2,9 @@
 
 MSc project based on methodology proposed by Eisenstat et al.(2016), applied to TVP-VAR-SV model for monetary policy transmission mechanism analysis.
 
-[slides](http://wwwf.imperial.ac.uk/~nkantas/mcmc_intro.pdf)
+[slides](https://github.com/mantezb/tvpVAR/blob/master/tvpVAR/docs/SMSS_tvpVAR_presentation_MZB.pdf)
 
-[dissertation](http://wwwf.imperial.ac.uk/~nkantas/mcmc_intro.pdf) 
+[dissertation](https://github.com/mantezb/tvpVAR/blob/master/tvpVAR/docs/SMSS_tvpVAR_report_MZB.pdf) 
 
 Code:
 
