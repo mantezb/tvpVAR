@@ -6,25 +6,24 @@ from tvpVAR.utils.ir_vecm_sv import ir_vecm_sv
 from tvpVAR.utils.ir_var_sv import ir_var_sv
 
 """ User Settings """
-output = 'resultsMCMC_AWM_full_4vars_conv_2lags_25k_1980_v2.npz'
+output = 'resultsMCMC_AWM_full_5vars_conv_2lags_25k_1970_lambda.npz'
 model = 'ir_var_sv' #'ir_var_sv' for lower triangular identification as per Primiceri (2005), monetary policy shocks
                      # 'ir_vecm_sv' for identification schene as per Blanchard (2002), fiscal policy shocks
 models = ['ir_vecm_sv', 'ir_var_sv']
-#variables = ['Commodity prices','Real output','Prices','Interest rate', 'Exchange Rate']
-variables = ['Real output', 'Prices', 'Interest rate', 'Exchange Rate']
+variables = ['Commodity prices','Real output','Prices','Interest rate', 'Exchange Rate']
 policy_equation = ['Interest rate']
-start_date = 1980.00  # start date of the data
+start_date = 1970.25  # start date of the data
 end_date = 2017.75  # end date of the data
 step = 0.25  # i.e. 0.25 for quarterly data
 ir_dates = [1980.00, 1990.00, 1996.00, 1999.00, 2009.00, 2015.00]  #.00 corresponds to Q1, .25 Q2, 0.5 Q3 and 0.74 Q4
 burnin_sims = 0  # extra burnin to be used
-ir_output = 'ir_AWM_full_4vars_conv_2lags_25k_1980_v2.npz'
+ir_output = 'resultsMCMC_AWM_diag_5vars_conv_2lags_25k_1970_lambda.npz'
 quantiles = [0.16, 0.5, 0.84]
 horizon_sim = 20  # simulation horizon for impulse responses
 horizon_plot = 12    # plotting horizon for impulse responses
 write_ir = True  # write impulse response results in "ir output" file
 save_plots = False  # save plots as pdf
-show_plots = False  # show plots
+show_plots = True  # show plots
 ax_adj = False  # adjust axis for plots
 
 """ Data Load """
@@ -85,6 +84,7 @@ plt.plot(parameters, p_tiv, marker='x', c='teal', linestyle='dashed', linewidth=
 plt.ylabel('TIV probability')
 plt.xlabel('Parameter Index')
 plt.title('Time Invariance Probability by Parameter')
+plt.tick_params(axis='x', rotation=-45)
 if save_plots:
     plt.savefig('TIV_SMSS.pdf', format='pdf')
 if show_plots:
@@ -114,7 +114,7 @@ for i in range(len(variables)):
 pol_eq = np.where(np.in1d(variables, policy_equation))[0].item()
 per = np.arange(start_date, end_date+step, step)
 ir_dates = np.array(ir_dates)
-t_start = np.where(np.in1d(per, ir_dates))[0]
+t_start = np.where(np.in1d(per, ir_dates))[0]-p
 
 # Structural identification and impulse response simulation:
 

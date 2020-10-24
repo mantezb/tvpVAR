@@ -20,7 +20,7 @@ data_path = path.abspath(path.join(base_path, 'data'))  # The path where the dat
 """ User Settings """
 # Data specification
 filename = 'AWM_5vars_conv_1970.csv'
-output = 'resultsMCMC_AWM_full_5vars_conv_2lags_25k_1970_50k.npz'
+output = 'resultsMCMC_AWM_full_5vars_conv_2lags_25k_1970_lambda.npz'
 
 # Standardisation controls
 scale_data = 1  # standardise series to have std. dev. of 1
@@ -34,9 +34,9 @@ lasso_alpha = 0  # use a lasso prior on the variance of alpha
 lasso_Phi = 1  # use a lasso prior on the state covariances
 do_expansion = 0  # use parameter expansion on om, Phi, gamma
 do_ishift = [1, 1]  # do a distn-invariant translation / scaling of draws
-nsims = 50000  # desired number of MCMC simulations
+nsims = 25000  # desired number of MCMC simulations
 burnin = 0.1 * nsims  # burn-in simulations to discard
-p = 2  # number of AR lags
+p = 2 # number of AR lags
 cointegration_terms = False  # True if cointegration terms exist, false if not
 model = 'full'  # diag, full
 models = ['full', 'diag']
@@ -147,13 +147,13 @@ phi0 = sps.csc_matrix(np.zeros((int(nk * (nk - 1) / 2), 1)))  # not found in the
 Phi0 = sps.eye(phi0.shape[0], format='csc').dot(10)  # not found in the paper - should correspond to phi's
 
 if model == 'full':
-    L01 = 0.1
+    L01 = 0.01 #0.1
 elif model == 'diag':
     L01 = 1  # in Eisenstat et al. 2016
 else:
     print('Identification for model type', model, 'is not available. Please choose from available models:', models)
 
-L02 = 0.1
+L02 = 0.01 #0.1
 
 lam20 = np.array([L01, L02])  # The same for all Lasso's
 mu0 = np.zeros((nk, 1))  # used for norm cdf for om_st calculation
@@ -307,7 +307,6 @@ if model == 'full':
             gamma = gamma - sps.csc_matrix(repmat(loc, 1, t))
 
         # Save draws
-        #if True: # TESTING
         if (isim + 1 > burnin) and (np.mod(isim + 1 - burnin, simstep) == 0):
             isave = int((isim + 1 - burnin) / simstep - 1)
             s_alpha[:, isave] = alpha.toarray().ravel()

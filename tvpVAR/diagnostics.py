@@ -3,12 +3,12 @@ import matplotlib.pyplot as plt
 from tvpVAR.utils.ineff_factor import ineff_factor
 
 """ User Settings """
-output = 'resultsMCMC_AWM_diag_4vars_conv_2lags_25k_1970_v2.npz'
+output = 'resultsMCMC_AWM_full_5vars_conv_2lags_25k_1970_lambda.npz'
 burnin_sims = 0  # extra simulations to be burned for the below calculations based on diagnostics
 vars = 5
-save_plots = True  # save plots as pdf
-show_plots = True  # show plots
-ineff_output = "ineff_full_5vars_conv_2lags_25k_1970_v4.npz"
+save_plots = False  # save plots as pdf
+show_plots = True # show plots
+ineff_output = "ineff_diag_5vars_conv_2lags_25k_1970_lambda.npz"
 
 """ Data Load """
 
@@ -82,8 +82,6 @@ if save_plots:
     plt.savefig('Beta_posterior_mean.pdf', format='pdf')
 if show_plots:
     plt.show()
-
-
 
 # Set which data to be used
 
