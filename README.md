@@ -1,6 +1,6 @@
-# Stochastic Model Specificaction Search for TVP-VAR-SV
+# Stochastic Model Specification Search for TVP-VAR-SV
 
-MSc project based on methodology proposed by Eisenstat et al.(2016), applied to TVP-VAR-SV model for monetary policy transmission mechanism analysis.
+MSc project based on methodology proposed by Eisenstat et al. (2016), applied to TVP-VAR-SV model for monetary policy transmission mechanism analysis.
 
 [slides](https://github.com/mantezb/tvpVAR/blob/master/tvpVAR/docs/SMSS_tvpVAR_presentation_MZB.pdf)
 
